@@ -1,0 +1,280 @@
+# ArgoCD ApplicationSets for Multi-Repository Setup
+# Each team has their own Git repository for API definitions
+---
+# Catalog Team - Separate Repository
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: catalog-team-apis
+  namespace: argocd
+  labels:
+    team: catalog-team
+    repo-strategy: multi-repo
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+            revision: develop
+            autoSync: true
+            prune: true
+          - env: uat
+            namespace: gravitee-apis-uat
+            revision: develop
+            autoSync: true
+            prune: true
+          - env: prod
+            namespace: gravitee-apis-prod
+            revision: main
+            autoSync: false  # Manual sync for production
+            prune: false
+  
+  template:
+    metadata:
+      name: 'catalog-team-apis-{{env}}'
+      namespace: argocd
+      labels:
+        team: catalog-team
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: catalog-team-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: catalog-team-alerts
+    
+    spec:
+      project: catalog-team
+      
+      # Team's own repository
+      source:
+        repoURL: 'https://github.com/your-org/catalog-team-apis.git'
+        targetRevision: '{{revision}}'
+        path: 'apis/overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{autoSync}}'
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+---
+# Commerce Team - Separate Repository
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: commerce-team-apis
+  namespace: argocd
+  labels:
+    team: commerce-team
+    repo-strategy: multi-repo
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+            revision: develop
+            autoSync: true
+            prune: true
+          - env: uat
+            namespace: gravitee-apis-uat
+            revision: develop
+            autoSync: true
+            prune: true
+          - env: prod
+            namespace: gravitee-apis-prod
+            revision: main
+            autoSync: false
+            prune: false
+  
+  template:
+    metadata:
+      name: 'commerce-team-apis-{{env}}'
+      namespace: argocd
+      labels:
+        team: commerce-team
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: commerce-team-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: commerce-team-alerts
+    
+    spec:
+      project: commerce-team
+      
+      # Team's own repository
+      source:
+        repoURL: 'https://github.com/your-org/commerce-team-apis.git'
+        targetRevision: '{{revision}}'
+        path: 'apis/overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{autoSync}}'
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Platform Team - Separate Repository
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-team-apis
+  namespace: argocd
+  labels:
+    team: platform-team
+    repo-strategy: multi-repo
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+            revision: develop
+            autoSync: true
+            prune: true
+          - env: uat
+            namespace: gravitee-apis-uat
+            revision: develop
+            autoSync: true
+            prune: true
+          - env: prod
+            namespace: gravitee-apis-prod
+            revision: main
+            autoSync: false
+            prune: false
+  
+  template:
+    metadata:
+      name: 'platform-team-apis-{{env}}'
+      namespace: argocd
+      labels:
+        team: platform-team
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: platform-team-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: platform-team-alerts
+    
+    spec:
+      project: platform-team
+      
+      # Team's own repository
+      source:
+        repoURL: 'https://github.com/your-org/platform-team-apis.git'
+        targetRevision: '{{revision}}'
+        path: 'apis/overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{autoSync}}'
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Shared Configuration Application (Platform Team manages)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gravitee-shared-config
+  namespace: argocd
+  labels:
+    team: platform-team
+    component: shared-config
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+          - env: uat
+            namespace: gravitee-apis-uat
+          - env: prod
+            namespace: gravitee-apis-prod
+  
+  template:
+    metadata:
+      name: 'gravitee-shared-config-{{env}}'
+      namespace: argocd
+      labels:
+        component: shared-config
+        environment: '{{env}}'
+      annotations:
+        # Shared config syncs first (wave -1)
+        argocd.argoproj.io/sync-wave: "-1"
+    
+    spec:
+      project: platform-team
+      
+      # Shared configuration repository
+      source:
+        repoURL: 'https://github.com/your-org/gravitee-shared-config.git'
+        targetRevision: main
+        path: 'base'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+---
+# Alternative: Using Multiple Sources (ArgoCD 2.6+)
+# This allows combining shared config with team-specific APIs in one Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: catalog-team-apis-prod-multi-source
+  namespace: argocd
+  labels:
+    team: catalog-team
+    environment: prod
+    strategy: multi-source
+spec:
+  project: catalog-team
+  
+  # Multiple sources - combines shared config with team APIs
+  sources:
+    # Source 1: Shared configuration (namespace, management context)
+    - repoURL: 'https://github.com/your-org/gravitee-shared-config.git'
+      targetRevision: main
+      path: 'base'
+      directory:
+        include: '{namespace.yaml,management-context.yaml}'
+    
+    # Source 2: Team-specific API definitions
+    - repoURL: 'https://github.com/your-org/catalog-team-apis.git'
+      targetRevision: main
+      path: 'apis/overlays/prod'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gravitee-apis-prod
+  
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+

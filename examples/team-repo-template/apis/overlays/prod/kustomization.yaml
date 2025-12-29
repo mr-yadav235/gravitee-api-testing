@@ -1,0 +1,40 @@
+# Production Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gravitee-apis-prod
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: production
+
+patches:
+  # Production backend URL
+  - target:
+      kind: ApiDefinition
+      name: my-api
+    patch: |-
+      - op: replace
+        path: /spec/proxy/groups/0/endpoints/0/target
+        value: http://my-service.my-team-prod.svc.cluster.local:8080
+      - op: add
+        path: /metadata/labels/environment
+        value: production
+      - op: replace
+        path: /spec/analytics/logging/condition
+        value: "{#request.headers['X-Debug'] == 'true'}"
+
+  # Production ManagementContext
+  - target:
+      kind: ManagementContext
+      name: gravitee-apim-context
+    patch: |-
+      - op: replace
+        path: /spec/baseUrl
+        value: http://gravitee-management-api.gravitee-apim-prod.svc.cluster.local:8083
+      - op: replace
+        path: /spec/environmentId
+        value: production
+

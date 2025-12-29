@@ -1,0 +1,63 @@
+# CODEOWNERS - Defines code ownership for API definitions
+# 
+# Each team owns their API definitions and must approve changes
+# Format: <pattern> <owners>
+
+# Default owners for the entire repository
+* @platform-team
+
+# ============================================================================
+# Team-based API Ownership
+# ============================================================================
+
+# Catalog Team - Products API
+/apis/teams/catalog-team/ @catalog-team @catalog-team-leads
+/apis/base/products-api/ @catalog-team @catalog-team-leads
+
+# Commerce Team - Orders API  
+/apis/teams/commerce-team/ @commerce-team @commerce-team-leads
+/apis/base/orders-api/ @commerce-team @commerce-team-leads
+
+# Platform Team - Users API and shared infrastructure
+/apis/teams/platform-team/ @platform-team @platform-team-leads
+/apis/base/users-api/ @platform-team @platform-team-leads
+
+# ============================================================================
+# Shared Resources (require platform team approval)
+# ============================================================================
+
+# Base configurations and shared resources
+/apis/base/namespace.yaml @platform-team
+/apis/base/management-context.yaml @platform-team
+
+# ArgoCD configurations (platform team only)
+/argocd/ @platform-team @sre-team
+
+# CI/CD workflows (platform team only)
+/.github/workflows/ @platform-team @devops-team
+
+# Scripts and tooling
+/scripts/ @platform-team @devops-team
+
+# Templates (platform team maintains, all teams can use)
+/templates/ @platform-team
+
+# Documentation
+/docs/ @platform-team @tech-writers
+
+# ============================================================================
+# Production Deployments (require additional approval)
+# ============================================================================
+
+# Production overlays require SRE approval
+/apis/teams/*/overlays/prod/ @sre-team
+/apis/overlays/prod/ @sre-team
+
+# ============================================================================
+# Security-sensitive files
+# ============================================================================
+
+# Any file with secrets references
+**/external-secrets.yaml @security-team @platform-team
+**/network-policies.yaml @security-team @platform-team
+

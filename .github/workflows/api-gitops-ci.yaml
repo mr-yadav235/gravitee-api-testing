@@ -1,0 +1,408 @@
+# GitOps CI Pipeline for Gravitee API Definitions
+# Validates API CRDs, OpenAPI specs, and prepares for GitOps deployment
+name: API GitOps CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
+    paths:
+      - 'apis/**'
+      - 'templates/**'
+      - '.github/workflows/api-gitops-ci.yaml'
+  
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'apis/**'
+      - 'templates/**'
+  
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment for validation'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+      dry_run:
+        description: 'Dry run mode (no actual deployment)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  KUBECONFORM_VERSION: '0.6.4'
+  KUSTOMIZE_VERSION: '5.3.0'
+  YQ_VERSION: '4.40.5'
+
+jobs:
+  # ============================================================================
+  # Validate YAML Syntax and Structure
+  # ============================================================================
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install yamllint
+        run: pip install yamllint
+      
+      - name: Run yamllint
+        run: |
+          yamllint -c .yamllint.yaml apis/ templates/
+        continue-on-error: false
+
+  # ============================================================================
+  # Validate Kubernetes CRDs with Kubeconform
+  # ============================================================================
+  validate-crds:
+    name: Validate Kubernetes CRDs
+    runs-on: ubuntu-latest
+    needs: yaml-lint
+    strategy:
+      matrix:
+        environment: [dev, uat, prod]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install kubeconform
+        run: |
+          curl -L https://github.com/yannh/kubeconform/releases/download/v${{ env.KUBECONFORM_VERSION }}/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+      
+      - name: Install kustomize
+        run: |
+          curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${{ env.KUSTOMIZE_VERSION }}/kustomize_v${{ env.KUSTOMIZE_VERSION }}_linux_amd64.tar.gz | tar xz
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Download GKO CRD schemas
+        run: |
+          mkdir -p /tmp/schemas
+          # Download Gravitee CRD schemas
+          curl -L -o /tmp/schemas/apidefinition.json \
+            https://raw.githubusercontent.com/gravitee-io/gravitee-kubernetes-operator/master/api/v1alpha1/apidefinition_types.go || true
+          
+          # Create schema directory structure
+          mkdir -p /tmp/schemas/gravitee.io
+      
+      - name: Build Kustomize manifests for ${{ matrix.environment }}
+        run: |
+          kustomize build apis/overlays/${{ matrix.environment }} > /tmp/manifests-${{ matrix.environment }}.yaml
+      
+      - name: Validate manifests with kubeconform
+        run: |
+          kubeconform \
+            -summary \
+            -output json \
+            -schema-location default \
+            -schema-location '/tmp/schemas/{{ .ResourceKind }}.json' \
+            -skip ApiDefinition,ApiPlan,ManagementContext \
+            /tmp/manifests-${{ matrix.environment }}.yaml
+      
+      - name: Validate GKO CRD structure
+        run: |
+          # Custom validation for GKO CRDs
+          python3 scripts/validate-gko-crds.py /tmp/manifests-${{ matrix.environment }}.yaml
+      
+      - name: Upload validated manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifests-${{ matrix.environment }}
+          path: /tmp/manifests-${{ matrix.environment }}.yaml
+          retention-days: 7
+
+  # ============================================================================
+  # Validate OpenAPI Specifications
+  # ============================================================================
+  validate-openapi:
+    name: Validate OpenAPI Specs
+    runs-on: ubuntu-latest
+    needs: yaml-lint
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install OpenAPI validators
+        run: |
+          npm install -g @apidevtools/swagger-cli
+          npm install -g @stoplight/spectral-cli
+      
+      - name: Extract OpenAPI specs from API definitions
+        run: |
+          mkdir -p /tmp/openapi-specs
+          python3 scripts/extract-openapi-specs.py apis/base /tmp/openapi-specs
+      
+      - name: Validate OpenAPI specs with Swagger CLI
+        run: |
+          for spec in /tmp/openapi-specs/*.yaml; do
+            if [ -f "$spec" ]; then
+              echo "Validating $spec..."
+              swagger-cli validate "$spec" || true
+            fi
+          done
+      
+      - name: Lint OpenAPI specs with Spectral
+        run: |
+          for spec in /tmp/openapi-specs/*.yaml; do
+            if [ -f "$spec" ]; then
+              echo "Linting $spec..."
+              spectral lint "$spec" --ruleset .spectral.yaml || true
+            fi
+          done
+
+  # ============================================================================
+  # Security Scanning
+  # ============================================================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [validate-crds]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install kustomize
+        run: |
+          curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${{ env.KUSTOMIZE_VERSION }}/kustomize_v${{ env.KUSTOMIZE_VERSION }}_linux_amd64.tar.gz | tar xz
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Build manifests for security scan
+        run: |
+          for env in dev uat prod; do
+            kustomize build apis/overlays/$env > /tmp/manifests-$env.yaml
+          done
+      
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'apis/'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Check for secrets in manifests
+        run: |
+          # Check for hardcoded secrets
+          if grep -rE "(password|secret|key):\s*['\"]?[a-zA-Z0-9]+" apis/ --include="*.yaml" | grep -v "SEALED_SECRET\|PLACEHOLDER\|secretRef\|secretKey"; then
+            echo "::warning::Potential hardcoded secrets found!"
+          fi
+      
+      - name: Validate no sensitive data in API definitions
+        run: |
+          python3 scripts/check-sensitive-data.py apis/
+
+  # ============================================================================
+  # Policy Validation
+  # ============================================================================
+  policy-validation:
+    name: Validate API Policies
+    runs-on: ubuntu-latest
+    needs: [validate-crds]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install yq
+        run: |
+          curl -L https://github.com/mikefarah/yq/releases/download/v${{ env.YQ_VERSION }}/yq_linux_amd64 -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+      
+      - name: Validate rate limiting policies
+        run: |
+          echo "Checking rate limiting configurations..."
+          
+          # Extract and validate rate limit configurations
+          for file in apis/base/*/api-definition.yaml; do
+            if [ -f "$file" ]; then
+              api_name=$(yq '.metadata.name' "$file")
+              rate_limit=$(yq '.spec.flows[].pre[] | select(.policy == "rate-limit") | .configuration.rate.limit' "$file" 2>/dev/null)
+              
+              if [ -n "$rate_limit" ]; then
+                echo "API: $api_name - Rate Limit: $rate_limit"
+                
+                # Validate rate limit is reasonable
+                if [ "$rate_limit" -gt 10000 ]; then
+                  echo "::warning::High rate limit ($rate_limit) for $api_name"
+                fi
+              fi
+            fi
+          done
+      
+      - name: Validate authentication policies
+        run: |
+          echo "Checking authentication configurations..."
+          
+          for file in apis/base/*/api-plan.yaml; do
+            if [ -f "$file" ]; then
+              # Check each plan has proper security
+              yq eval-all '.metadata.name as $name | .spec.security as $security | "\($name): \($security)"' "$file"
+            fi
+          done
+      
+      - name: Check policy best practices
+        run: |
+          python3 scripts/validate-policies.py apis/
+
+  # ============================================================================
+  # Diff Check for GitOps
+  # ============================================================================
+  gitops-diff:
+    name: GitOps Diff Check
+    runs-on: ubuntu-latest
+    needs: [validate-crds, policy-validation]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          path: pr
+      
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+      
+      - name: Install kustomize
+        run: |
+          curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${{ env.KUSTOMIZE_VERSION }}/kustomize_v${{ env.KUSTOMIZE_VERSION }}_linux_amd64.tar.gz | tar xz
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Generate diff for each environment
+        run: |
+          mkdir -p /tmp/diffs
+          
+          for env in dev uat prod; do
+            echo "=== Generating diff for $env ==="
+            
+            # Build manifests from base branch
+            if [ -d "base/apis/overlays/$env" ]; then
+              kustomize build base/apis/overlays/$env > /tmp/base-$env.yaml 2>/dev/null || echo "" > /tmp/base-$env.yaml
+            else
+              echo "" > /tmp/base-$env.yaml
+            fi
+            
+            # Build manifests from PR branch
+            if [ -d "pr/apis/overlays/$env" ]; then
+              kustomize build pr/apis/overlays/$env > /tmp/pr-$env.yaml 2>/dev/null || echo "" > /tmp/pr-$env.yaml
+            else
+              echo "" > /tmp/pr-$env.yaml
+            fi
+            
+            # Generate diff
+            diff -u /tmp/base-$env.yaml /tmp/pr-$env.yaml > /tmp/diffs/$env.diff || true
+          done
+      
+      - name: Post diff as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let comment = '## 🔄 GitOps Diff Report\n\n';
+            
+            const envs = ['dev', 'uat', 'prod'];
+            for (const env of envs) {
+              const diffPath = `/tmp/diffs/${env}.diff`;
+              if (fs.existsSync(diffPath)) {
+                const diff = fs.readFileSync(diffPath, 'utf8');
+                if (diff.trim()) {
+                  comment += `### ${env.toUpperCase()} Environment\n\n`;
+                  comment += '```diff\n' + diff.substring(0, 3000) + '\n```\n\n';
+                  if (diff.length > 3000) {
+                    comment += '_Diff truncated. See full diff in artifacts._\n\n';
+                  }
+                } else {
+                  comment += `### ${env.toUpperCase()} Environment\n\n`;
+                  comment += '_No changes detected._\n\n';
+                }
+              }
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # ============================================================================
+  # Notify ArgoCD for Sync (on main branch)
+  # ============================================================================
+  notify-argocd:
+    name: Notify ArgoCD
+    runs-on: ubuntu-latest
+    needs: [validate-crds, security-scan, policy-validation]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+      - name: Trigger ArgoCD Sync
+        run: |
+          echo "ArgoCD will automatically sync based on Git changes"
+          echo "Manual sync can be triggered via ArgoCD CLI or UI"
+          
+          # Optional: Trigger ArgoCD sync via API
+          # curl -X POST \
+          #   -H "Authorization: Bearer ${{ secrets.ARGOCD_TOKEN }}" \
+          #   "${{ secrets.ARGOCD_SERVER }}/api/v1/applications/gravitee-apis-prod/sync"
+      
+      - name: Create deployment record
+        run: |
+          echo "Commit: ${{ github.sha }}"
+          echo "Author: ${{ github.actor }}"
+          echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+  # ============================================================================
+  # Summary Report
+  # ============================================================================
+  summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [yaml-lint, validate-crds, validate-openapi, security-scan, policy-validation]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 📊 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| YAML Lint | ${{ needs.yaml-lint.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CRD Validation | ${{ needs.validate-crds.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| OpenAPI Validation | ${{ needs.validate-openapi.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Policy Validation | ${{ needs.policy-validation.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+

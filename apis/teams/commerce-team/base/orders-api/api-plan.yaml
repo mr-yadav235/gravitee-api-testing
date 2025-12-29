@@ -1,0 +1,110 @@
+# Orders API Plans - Commerce Team
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: orders-api-standard-plan
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: orders-api-standard-plan
+    app.kubernetes.io/component: api-plan
+    api.gravitee.io/api: orders-api
+    team: commerce-team
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  apiRef:
+    name: orders-api
+    namespace: gravitee-apis
+  
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Standard Plan"
+  description: "Standard access to Orders API"
+  
+  order: 1
+  security: API_KEY
+  status: PUBLISHED
+  validation: AUTO
+  
+  flows:
+    - name: "Standard Limits"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        - name: "Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 100
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  characteristics:
+    - "100 requests/minute"
+    - "Standard support"
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: orders-api-premium-plan
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: orders-api-premium-plan
+    app.kubernetes.io/component: api-plan
+    api.gravitee.io/api: orders-api
+    team: commerce-team
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  apiRef:
+    name: orders-api
+    namespace: gravitee-apis
+  
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Premium Plan"
+  description: "Premium access with higher limits"
+  
+  order: 2
+  security: JWT
+  status: PUBLISHED
+  validation: MANUAL
+  
+  securityDefinition: |
+    {
+      "signature": "RSA_RS256",
+      "publicKeyResolver": "JWKS_URL",
+      "jwksUrl": "https://auth.example.com/.well-known/jwks.json",
+      "userClaim": "sub",
+      "clientIdClaim": "azp"
+    }
+  
+  flows:
+    - name: "Premium Limits"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        - name: "Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 500
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  characteristics:
+    - "500 requests/minute"
+    - "Priority support"
+    - "SLA: 99.9%"
+

@@ -1,0 +1,221 @@
+# Users API Definition - GKO ApiDefinition CRD
+# This is the source of truth for the Users API configuration
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: users-api
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: users-api
+    app.kubernetes.io/component: api
+    api.gravitee.io/category: user-management
+    api.gravitee.io/version: v1
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # API metadata for documentation
+    api.gravitee.io/description: "User Management API for CRUD operations"
+    api.gravitee.io/owner: "platform-team"
+    api.gravitee.io/contact: "platform-team@example.com"
+spec:
+  # Reference to ManagementContext
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  # API name and description
+  name: "Users API"
+  version: "1.0.0"
+  description: "RESTful API for user management operations including CRUD, authentication, and profile management"
+  
+  # API visibility and lifecycle
+  visibility: PRIVATE
+  lifecycleState: PUBLISHED
+  
+  # Deployment state - set to DEPLOYED to auto-deploy
+  state: STARTED
+  
+  # API Categories and Tags
+  categories:
+    - "User Management"
+    - "Identity"
+  tags:
+    - "users"
+    - "authentication"
+    - "profiles"
+  
+  # API Labels for organization
+  labels:
+    - "internal"
+    - "core-service"
+  
+  # Virtual hosts / Entry points
+  proxy:
+    virtualHosts:
+      - path: /api/v1/users
+        overrideEntrypoint: true
+    
+    # Backend endpoint groups
+    groups:
+      - name: default-group
+        endpoints:
+          - name: users-service
+            target: http://users-service.backend.svc.cluster.local:8080
+            weight: 1
+            backup: false
+            type: http
+            inherit: true
+        
+        # Load balancing configuration
+        loadBalancer:
+          type: ROUND_ROBIN
+        
+        # HTTP client configuration
+        http:
+          connectTimeout: 5000
+          idleTimeout: 60000
+          maxConcurrentConnections: 100
+          readTimeout: 10000
+          useCompression: true
+          followRedirects: false
+        
+        # SSL/TLS configuration
+        ssl:
+          trustAll: false
+          hostnameVerifier: true
+  
+  # Flow mode for policy execution
+  flowMode: DEFAULT
+  
+  # Request/Response flows with policies
+  flows:
+    - name: "All Requests"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      
+      # Pre-request policies
+      pre:
+        - name: "Rate Limiting"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 100
+              periodTime: 1
+              periodTimeUnit: MINUTES
+            key: "{#request.headers['X-Gravitee-Api-Key']}"
+        
+        - name: "Request Validation"
+          policy: json-validation
+          enabled: true
+          configuration:
+            scope: REQUEST
+            errorMessage: "Invalid request payload"
+        
+        - name: "Add Correlation ID"
+          policy: transform-headers
+          enabled: true
+          configuration:
+            scope: REQUEST
+            addHeaders:
+              - name: X-Correlation-ID
+                value: "{#request.id}"
+      
+      # Post-response policies
+      post:
+        - name: "Add Response Headers"
+          policy: transform-headers
+          enabled: true
+          configuration:
+            scope: RESPONSE
+            addHeaders:
+              - name: X-Response-Time
+                value: "{#response.time}ms"
+              - name: X-Api-Version
+                value: "1.0.0"
+  
+  # Path-specific flows
+  pathMappings:
+    - path: /api/v1/users
+      operations:
+        - method: GET
+          description: "List all users"
+        - method: POST
+          description: "Create a new user"
+    - path: /api/v1/users/:id
+      operations:
+        - method: GET
+          description: "Get user by ID"
+        - method: PUT
+          description: "Update user"
+        - method: DELETE
+          description: "Delete user"
+  
+  # Response templates for error handling
+  responseTemplates:
+    API_KEY_MISSING:
+      - statusCode: 401
+        body: '{"error": "API key is required", "code": "API_KEY_MISSING"}'
+        headers:
+          Content-Type: application/json
+    RATE_LIMIT_TOO_MANY_REQUESTS:
+      - statusCode: 429
+        body: '{"error": "Rate limit exceeded", "code": "RATE_LIMIT_EXCEEDED", "retryAfter": "{#properties[''retry-after'']}"}'
+        headers:
+          Content-Type: application/json
+          Retry-After: "{#properties['retry-after']}"
+    DEFAULT:
+      - statusCode: 500
+        body: '{"error": "Internal server error", "code": "INTERNAL_ERROR"}'
+        headers:
+          Content-Type: application/json
+  
+  # Properties for dynamic configuration
+  properties:
+    - key: backend-url
+      value: http://users-service.backend.svc.cluster.local:8080
+      dynamic: false
+      encrypted: false
+    - key: rate-limit
+      value: "100"
+      dynamic: true
+      encrypted: false
+  
+  # Resources (documentation, schemas)
+  resources:
+    - name: "OpenAPI Specification"
+      type: content
+      configuration:
+        content: |
+          openapi: 3.0.3
+          info:
+            title: Users API
+            version: 1.0.0
+          paths:
+            /users:
+              get:
+                summary: List users
+                responses:
+                  '200':
+                    description: Success
+  
+  # Analytics and logging
+  analytics:
+    enabled: true
+    logging:
+      mode: CLIENT_PROXY
+      content: PAYLOADS
+      scope: REQUEST_RESPONSE
+      condition: "{#request.headers['X-Debug'] == 'true'}"
+  
+  # Metadata
+  metadata:
+    - name: team
+      value: platform-team
+      format: STRING
+    - name: cost-center
+      value: "CC-001"
+      format: STRING
+

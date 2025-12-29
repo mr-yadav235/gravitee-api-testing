@@ -1,0 +1,16 @@
+# Namespace for Gravitee API Definitions managed by GKO
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gravitee-apis
+  labels:
+    app.kubernetes.io/name: gravitee-apis
+    app.kubernetes.io/component: api-definitions
+    gravitee.io/managed-by: gko
+  annotations:
+    # ArgoCD annotations for sync management
+    argocd.argoproj.io/sync-wave: "-1"
+    # Description
+    description: "Namespace for Gravitee API definitions managed by GKO"
+

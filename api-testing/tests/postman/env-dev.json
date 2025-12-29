@@ -1,0 +1,31 @@
+{
+  "id": "env-dev",
+  "name": "Development",
+  "values": [
+    {
+      "key": "GATEWAY_URL",
+      "value": "https://api.dev.example.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "API_KEY",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "ENVIRONMENT",
+      "value": "dev",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "TIMEOUT",
+      "value": "30000",
+      "type": "default",
+      "enabled": true
+    }
+  ]
+}
+

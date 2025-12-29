@@ -1,0 +1,282 @@
+{
+  "info": {
+    "name": "Gravitee API Smoke Tests",
+    "description": "Quick health checks to verify APIs are accessible after deployment",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "GATEWAY_URL",
+      "value": "https://api.example.com"
+    },
+    {
+      "key": "API_KEY",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Users API",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users/health",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response time < 2s', () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test('Has correlation ID header', () => {",
+                  "    pm.response.to.have.header('X-Correlation-ID');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auth Required - No Key",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401 without API key', () => {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Has error message', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auth Success - Valid Key",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 with valid key', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is JSON', () => {",
+                  "    pm.response.to.be.json;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders API",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/orders/health",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response time < 2s', () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/orders",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is array', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Products API",
+      "item": [
+        {
+          "name": "Health Check (Public)",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/products/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 (public API)', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Products (Public)",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Has CORS headers', () => {",
+                  "    pm.response.to.have.header('Access-Control-Allow-Origin');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gateway Policies",
+      "item": [
+        {
+          "name": "Rate Limit Headers Present",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Has rate limit headers', () => {",
+                  "    pm.response.to.have.header('X-Rate-Limit-Limit');",
+                  "    pm.response.to.have.header('X-Rate-Limit-Remaining');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Response Headers Present",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Has API version header', () => {",
+                  "    pm.response.to.have.header('X-Api-Version');",
+                  "});",
+                  "",
+                  "pm.test('Has response time header', () => {",
+                  "    pm.response.to.have.header('X-Response-Time');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

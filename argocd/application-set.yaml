@@ -1,0 +1,200 @@
+# ArgoCD ApplicationSet for Gravitee APIs
+# Automatically creates Applications for each environment
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gravitee-apis
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: gravitee-apis
+    app.kubernetes.io/component: applicationset
+spec:
+  # Generate applications for each environment
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+            cluster: https://kubernetes.default.svc
+            syncPolicy: auto
+            autoHeal: true
+            prune: true
+            approvalRequired: false
+          - env: uat
+            namespace: gravitee-apis-uat
+            cluster: https://kubernetes.default.svc
+            syncPolicy: auto
+            autoHeal: true
+            prune: true
+            approvalRequired: false
+          - env: prod
+            namespace: gravitee-apis-prod
+            cluster: https://kubernetes.default.svc
+            syncPolicy: manual  # Manual sync for production
+            autoHeal: false
+            prune: false
+            approvalRequired: true
+  
+  template:
+    metadata:
+      name: 'gravitee-apis-{{env}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: gravitee-apis
+        app.kubernetes.io/instance: '{{env}}'
+        environment: '{{env}}'
+      annotations:
+        # Notifications for sync status
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: gravitee-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: gravitee-alerts
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: gravitee-alerts
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    
+    spec:
+      project: gravitee-apis
+      
+      source:
+        repoURL: 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+        targetRevision: '{{env == "prod" ? "main" : "develop"}}'
+        path: 'apis/overlays/{{env}}'
+        
+        # Kustomize configuration
+        kustomize:
+          commonLabels:
+            argocd.argoproj.io/instance: 'gravitee-apis-{{env}}'
+      
+      destination:
+        server: '{{cluster}}'
+        namespace: '{{namespace}}'
+      
+      # Sync policy based on environment
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{autoHeal}}'
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      
+      # Health checks
+      ignoreDifferences:
+        - group: gravitee.io
+          kind: ApiDefinition
+          jsonPointers:
+            - /status
+        - group: gravitee.io
+          kind: ApiPlan
+          jsonPointers:
+            - /status
+      
+      # Revision history limit
+      revisionHistoryLimit: 10
+---
+# ArgoCD Project for Gravitee APIs
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: gravitee-apis
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: gravitee-apis-project
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Gravitee API definitions managed via GitOps"
+  
+  # Source repositories
+  sourceRepos:
+    - 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+    - 'https://github.com/your-org/gravitee-api-*.git'
+  
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  # Allowed cluster resources
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+  
+  # Allowed namespace resources
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: ''
+      kind: Service
+    - group: gravitee.io
+      kind: '*'
+    - group: external-secrets.io
+      kind: ExternalSecret
+  
+  # Deny list for sensitive resources
+  namespaceResourceBlacklist:
+    - group: ''
+      kind: ResourceQuota
+    - group: ''
+      kind: LimitRange
+  
+  # Roles for project access
+  roles:
+    - name: api-developer
+      description: "Can view and sync API definitions"
+      policies:
+        - p, proj:gravitee-apis:api-developer, applications, get, gravitee-apis/*, allow
+        - p, proj:gravitee-apis:api-developer, applications, sync, gravitee-apis/gravitee-apis-dev, allow
+        - p, proj:gravitee-apis:api-developer, applications, sync, gravitee-apis/gravitee-apis-uat, allow
+      groups:
+        - api-developers
+    
+    - name: api-admin
+      description: "Full access to API definitions including production"
+      policies:
+        - p, proj:gravitee-apis:api-admin, applications, *, gravitee-apis/*, allow
+      groups:
+        - api-admins
+        - platform-team
+  
+  # Sync windows for production
+  syncWindows:
+    - kind: allow
+      schedule: '0 6-18 * * 1-5'  # Weekdays 6 AM - 6 PM
+      duration: 12h
+      applications:
+        - gravitee-apis-prod
+      manualSync: true
+    - kind: deny
+      schedule: '0 18-6 * * *'  # Outside business hours
+      duration: 12h
+      applications:
+        - gravitee-apis-prod
+      manualSync: false
+  
+  # Orphaned resources monitoring
+  orphanedResources:
+    warn: true
+    ignore:
+      - group: ''
+        kind: ConfigMap
+        name: kube-root-ca.crt
+

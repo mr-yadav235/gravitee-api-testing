@@ -1,0 +1,50 @@
+# Catalog Team - Development Environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: catalog-team-apis-dev
+
+namespace: gravitee-apis-dev
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: development
+  team: catalog-team
+
+patches:
+  # Dev backend URL for Products API
+  - target:
+      kind: ApiDefinition
+      name: products-api
+    patch: |-
+      - op: replace
+        path: /spec/proxy/groups/0/endpoints/0/target
+        value: http://products-service.catalog-team-dev.svc.cluster.local:8080
+      - op: add
+        path: /metadata/labels/environment
+        value: development
+      - op: replace
+        path: /spec/flows/0/pre/0/configuration/rate/limit
+        value: 1000
+      - op: replace
+        path: /spec/analytics/logging/mode
+        value: CLIENT_PROXY
+      - op: replace
+        path: /spec/analytics/logging/content
+        value: PAYLOADS
+
+  # Update ManagementContext for dev
+  - target:
+      kind: ManagementContext
+      name: gravitee-apim-context
+    patch: |-
+      - op: replace
+        path: /spec/baseUrl
+        value: http://gravitee-management-api.gravitee-apim-dev.svc.cluster.local:8083
+      - op: replace
+        path: /spec/environmentId
+        value: development
+

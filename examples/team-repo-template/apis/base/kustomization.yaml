@@ -1,0 +1,30 @@
+# Team API Base Kustomization
+# Update team name and details below
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: my-team-apis  # Change to your team name
+
+namespace: gravitee-apis
+
+commonLabels:
+  app.kubernetes.io/managed-by: gko
+  app.kubernetes.io/part-of: gravitee-apim
+  team: my-team              # Change to your team name
+  cost-center: CC-MY-TEAM    # Change to your cost center
+
+resources:
+  # Reference shared config from central repo
+  # Option 1: Remote reference (recommended for multi-repo)
+  - https://github.com/your-org/gravitee-shared-config//base/namespace.yaml?ref=v1.0.0
+  - https://github.com/your-org/gravitee-shared-config//base/management-context.yaml?ref=v1.0.0
+  
+  # Option 2: Local copy (if you maintain your own copies)
+  # - namespace.yaml
+  # - management-context.yaml
+  
+  # Your API definitions
+  - my-api/api-definition.yaml
+  - my-api/api-plan.yaml
+

@@ -1,0 +1,150 @@
+# Orders API Definition - GKO ApiDefinition CRD
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: orders-api
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: orders-api
+    app.kubernetes.io/component: api
+    api.gravitee.io/category: e-commerce
+    api.gravitee.io/version: v1
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    api.gravitee.io/description: "Order Management API"
+    api.gravitee.io/owner: "commerce-team"
+spec:
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Orders API"
+  version: "1.0.0"
+  description: "RESTful API for order management including creation, tracking, and fulfillment"
+  
+  visibility: PRIVATE
+  lifecycleState: PUBLISHED
+  state: STARTED
+  
+  categories:
+    - "E-Commerce"
+    - "Orders"
+  
+  tags:
+    - "orders"
+    - "commerce"
+    - "transactions"
+  
+  proxy:
+    virtualHosts:
+      - path: /api/v1/orders
+        overrideEntrypoint: true
+    
+    groups:
+      - name: default-group
+        endpoints:
+          - name: orders-service
+            target: http://orders-service.backend.svc.cluster.local:8080
+            weight: 1
+            backup: false
+            type: http
+        
+        loadBalancer:
+          type: ROUND_ROBIN
+        
+        http:
+          connectTimeout: 5000
+          idleTimeout: 60000
+          maxConcurrentConnections: 100
+          readTimeout: 30000  # Longer timeout for order processing
+          useCompression: true
+  
+  flowMode: DEFAULT
+  
+  flows:
+    - name: "All Requests"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      
+      pre:
+        - name: "Rate Limiting"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 50
+              periodTime: 1
+              periodTimeUnit: MINUTES
+        
+        - name: "Request Logging"
+          policy: assign-content
+          enabled: true
+          configuration:
+            scope: REQUEST
+            body: "{#jsonPath(#request.content, '$')}"
+      
+      post:
+        - name: "Response Headers"
+          policy: transform-headers
+          enabled: true
+          configuration:
+            scope: RESPONSE
+            addHeaders:
+              - name: X-Api-Version
+                value: "1.0.0"
+    
+    # Specific flow for order creation with validation
+    - name: "Create Order"
+      pathOperator:
+        path: /
+        operator: EQUALS
+      methods:
+        - POST
+      enabled: true
+      
+      pre:
+        - name: "Validate Order Payload"
+          policy: json-validation
+          enabled: true
+          configuration:
+            scope: REQUEST
+            schema: |
+              {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "required": ["customerId", "items"],
+                "properties": {
+                  "customerId": {"type": "string"},
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": ["productId", "quantity"],
+                      "properties": {
+                        "productId": {"type": "string"},
+                        "quantity": {"type": "integer", "minimum": 1}
+                      }
+                    }
+                  }
+                }
+              }
+            errorMessage: "Invalid order payload"
+  
+  responseTemplates:
+    DEFAULT:
+      - statusCode: 500
+        body: '{"error": "Order processing failed", "code": "ORDER_ERROR"}'
+        headers:
+          Content-Type: application/json
+  
+  analytics:
+    enabled: true
+    logging:
+      mode: CLIENT_PROXY
+      content: HEADERS
+      scope: REQUEST_RESPONSE
+

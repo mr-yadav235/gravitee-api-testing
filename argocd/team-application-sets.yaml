@@ -1,0 +1,318 @@
+# ArgoCD ApplicationSets for Team-based API Deployments
+# Each team gets their own set of applications per environment
+---
+# Catalog Team ApplicationSet
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: catalog-team-apis
+  namespace: argocd
+  labels:
+    team: catalog-team
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+            syncPolicy: auto
+            prune: true
+          - env: uat
+            namespace: gravitee-apis-uat
+            syncPolicy: auto
+            prune: true
+          - env: prod
+            namespace: gravitee-apis-prod
+            syncPolicy: manual
+            prune: false
+  
+  template:
+    metadata:
+      name: 'catalog-team-apis-{{env}}'
+      namespace: argocd
+      labels:
+        team: catalog-team
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: catalog-team-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: catalog-team-alerts
+    
+    spec:
+      project: catalog-team
+      
+      source:
+        repoURL: 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+        targetRevision: '{{env == "prod" ? "main" : "develop"}}'
+        path: 'apis/teams/catalog-team/overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Commerce Team ApplicationSet
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: commerce-team-apis
+  namespace: argocd
+  labels:
+    team: commerce-team
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+            syncPolicy: auto
+            prune: true
+          - env: uat
+            namespace: gravitee-apis-uat
+            syncPolicy: auto
+            prune: true
+          - env: prod
+            namespace: gravitee-apis-prod
+            syncPolicy: manual
+            prune: false
+  
+  template:
+    metadata:
+      name: 'commerce-team-apis-{{env}}'
+      namespace: argocd
+      labels:
+        team: commerce-team
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: commerce-team-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: commerce-team-alerts
+    
+    spec:
+      project: commerce-team
+      
+      source:
+        repoURL: 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+        targetRevision: '{{env == "prod" ? "main" : "develop"}}'
+        path: 'apis/teams/commerce-team/overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Platform Team ApplicationSet (Users API)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-team-apis
+  namespace: argocd
+  labels:
+    team: platform-team
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: gravitee-apis-dev
+            syncPolicy: auto
+            prune: true
+          - env: uat
+            namespace: gravitee-apis-uat
+            syncPolicy: auto
+            prune: true
+          - env: prod
+            namespace: gravitee-apis-prod
+            syncPolicy: manual
+            prune: false
+  
+  template:
+    metadata:
+      name: 'platform-team-apis-{{env}}'
+      namespace: argocd
+      labels:
+        team: platform-team
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: platform-team-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: platform-team-alerts
+    
+    spec:
+      project: platform-team
+      
+      source:
+        repoURL: 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+        targetRevision: '{{env == "prod" ? "main" : "develop"}}'
+        path: 'apis/teams/platform-team/overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# ArgoCD Projects for each team
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: catalog-team
+  namespace: argocd
+spec:
+  description: "Catalog Team APIs - Products API"
+  
+  sourceRepos:
+    - 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+  
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  
+  namespaceResourceWhitelist:
+    - group: gravitee.io
+      kind: '*'
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+  
+  roles:
+    - name: catalog-developer
+      description: "Catalog team developers"
+      policies:
+        - p, proj:catalog-team:catalog-developer, applications, get, catalog-team/*, allow
+        - p, proj:catalog-team:catalog-developer, applications, sync, catalog-team/catalog-team-apis-dev, allow
+        - p, proj:catalog-team:catalog-developer, applications, sync, catalog-team/catalog-team-apis-uat, allow
+      groups:
+        - catalog-team
+    
+    - name: catalog-admin
+      description: "Catalog team leads"
+      policies:
+        - p, proj:catalog-team:catalog-admin, applications, *, catalog-team/*, allow
+      groups:
+        - catalog-team-leads
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: commerce-team
+  namespace: argocd
+spec:
+  description: "Commerce Team APIs - Orders API"
+  
+  sourceRepos:
+    - 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+  
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  
+  namespaceResourceWhitelist:
+    - group: gravitee.io
+      kind: '*'
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+  
+  roles:
+    - name: commerce-developer
+      description: "Commerce team developers"
+      policies:
+        - p, proj:commerce-team:commerce-developer, applications, get, commerce-team/*, allow
+        - p, proj:commerce-team:commerce-developer, applications, sync, commerce-team/commerce-team-apis-dev, allow
+        - p, proj:commerce-team:commerce-developer, applications, sync, commerce-team/commerce-team-apis-uat, allow
+      groups:
+        - commerce-team
+    
+    - name: commerce-admin
+      description: "Commerce team leads"
+      policies:
+        - p, proj:commerce-team:commerce-admin, applications, *, commerce-team/*, allow
+      groups:
+        - commerce-team-leads
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform-team
+  namespace: argocd
+spec:
+  description: "Platform Team APIs - Users API and shared infrastructure"
+  
+  sourceRepos:
+    - 'https://github.com/your-org/gravitee-api-testing-strategy.git'
+  
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+  
+  namespaceResourceWhitelist:
+    - group: gravitee.io
+      kind: '*'
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: external-secrets.io
+      kind: ExternalSecret
+  
+  roles:
+    - name: platform-developer
+      description: "Platform team developers"
+      policies:
+        - p, proj:platform-team:platform-developer, applications, *, platform-team/*, allow
+      groups:
+        - platform-team
+    
+    - name: platform-admin
+      description: "Platform team leads - full access"
+      policies:
+        - p, proj:platform-team:platform-admin, applications, *, */*, allow
+      groups:
+        - platform-team-leads
+

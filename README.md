@@ -1,157 +1,245 @@
-# API Testing Strategy
+# Gravitee API GitOps CI/CD
 
-This folder contains the complete API testing suite for Gravitee APIM Gateway APIs.
+GitOps-driven CI/CD solution for managing APIs in Gravitee APIM Gateway using the Gravitee Kubernetes Operator (GKO).
 
-## 📁 Folder Structure
+## 🎯 Features
+
+- **GitOps-First**: Git as the single source of truth for all API definitions
+- **GKO CRDs**: Native Kubernetes resources (ApiDefinition, ApiPlan, ManagementContext)
+- **Multi-Environment**: Dev → UAT → Production promotion workflow
+- **Automated Validation**: OpenAPI specs, CRD structure, security policies
+- **ArgoCD Integration**: Automatic sync with approval gates for production
+- **Rollback Support**: Easy rollback to any previous version
+- **Security**: External secrets, network policies, RBAC
+
+## 📁 Repository Structure
 
 ```
-api-testing/
-├── docs/
-│   └── API_TESTING_STRATEGY.md    # Comprehensive testing strategy documentation
-├── scripts/
-│   └── check-performance-thresholds.py  # Performance threshold validation
-├── tests/
-│   ├── contract/                  # Contract/Schema validation tests
-│   │   ├── openapi/              # OpenAPI specs for validation
-│   │   └── test_schema_validation.py
-│   ├── e2e/                      # End-to-end tests
-│   ├── functional/               # Functional API tests
-│   │   └── users-api.json        # Postman collection for Users API
-│   ├── performance/              # Performance & load tests
-│   │   ├── load-test.js          # k6 load test script
-│   │   └── stress-test.js        # k6 stress test script
-│   ├── postman/                  # Postman collections & environments
-│   │   ├── env-dev.json          # Dev environment variables
-│   │   ├── env-uat.json          # UAT environment variables
-│   │   ├── env-prod.json         # Prod environment variables
-│   │   └── smoke-tests.json      # Smoke test collection
-│   ├── security/                 # Security tests
-│   │   ├── test_api_security.py  # Security test suite
-│   │   └── zap-rules.tsv         # OWASP ZAP rules
-│   └── smoke/                    # Smoke tests
-└── workflows/
-    └── post-deploy-tests.yaml    # GitHub Actions workflow
+├── api-testing/                 # 🧪 Isolated API testing suite
+│   ├── docs/                    # Testing strategy documentation
+│   ├── scripts/                 # Test utility scripts
+│   ├── tests/                   # All test files
+│   │   ├── contract/            # Contract/schema validation
+│   │   ├── functional/          # Functional API tests
+│   │   ├── performance/         # k6 load & stress tests
+│   │   ├── postman/             # Postman collections & envs
+│   │   ├── security/            # Security tests
+│   │   └── smoke/               # Smoke tests
+│   └── workflows/               # Test-specific GitHub Actions
+├── apis/
+│   ├── base/                    # Base API definitions (source of truth)
+│   │   ├── users-api/
+│   │   ├── orders-api/
+│   │   └── products-api/
+│   ├── overlays/                # Environment-specific configurations
+│   │   ├── dev/
+│   │   ├── uat/
+│   │   └── prod/
+│   └── teams/                   # Team-based API ownership
+│       ├── catalog-team/
+│       └── commerce-team/
+├── argocd/                      # ArgoCD ApplicationSets and RBAC
+├── templates/                   # API definition templates
+├── scripts/                     # Validation scripts
+├── docs/                        # GitOps documentation
+└── .github/workflows/           # CI/CD pipelines
 ```
-
-## 🧪 Test Types
-
-| Test Type | Tool | Purpose |
-|-----------|------|---------|
-| **Smoke Tests** | Newman/Postman | Quick health checks post-deployment |
-| **Functional Tests** | Newman/Postman | Full API functionality validation |
-| **Contract Tests** | Pytest + OpenAPI | Schema validation against specs |
-| **Security Tests** | Pytest + OWASP ZAP | Vulnerability scanning |
-| **Performance Tests** | k6 | Load and stress testing |
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-```bash
-# Install Node.js dependencies
-npm install -g newman k6
+- Kubernetes cluster with GKO installed
+- ArgoCD deployed and configured
+- GitHub repository access
 
-# Install Python dependencies
-pip install pytest requests jsonschema schemathesis
-```
-
-### Running Tests Locally
-
-#### Smoke Tests
-```bash
-newman run tests/postman/smoke-tests.json \
-  -e tests/postman/env-dev.json \
-  --reporters cli,junit \
-  --reporter-junit-export results/smoke-results.xml
-```
-
-#### Functional Tests
-```bash
-newman run tests/functional/users-api.json \
-  -e tests/postman/env-dev.json \
-  --reporters cli,junit
-```
-
-#### Contract Tests
-```bash
-pytest tests/contract/test_schema_validation.py -v \
-  --junitxml=results/contract-results.xml
-```
-
-#### Security Tests
-```bash
-pytest tests/security/test_api_security.py -v \
-  --junitxml=results/security-results.xml
-```
-
-#### Performance Tests
-```bash
-# Load test
-k6 run tests/performance/load-test.js \
-  -e GATEWAY_URL=http://localhost:8082 \
-  -e ENVIRONMENT=dev
-
-# Stress test
-k6 run tests/performance/stress-test.js \
-  -e GATEWAY_URL=http://localhost:8082 \
-  -e ENVIRONMENT=dev
-```
-
-## 🔄 CI/CD Integration
-
-The `workflows/post-deploy-tests.yaml` file contains a GitHub Actions workflow that:
-
-1. **Triggers** after API deployment via ArgoCD
-2. **Runs** tests in sequence: Smoke → Functional → Contract → Security → Performance
-3. **Reports** results back to GitHub and Slack
-4. **Fails** the pipeline if critical tests don't pass
-
-### Using the Workflow
-
-Copy the workflow to your `.github/workflows/` directory:
+### 1. Install Gravitee Kubernetes Operator
 
 ```bash
-cp workflows/post-deploy-tests.yaml ../.github/workflows/
+# Add Gravitee Helm repository
+helm repo add gravitee https://helm.gravitee.io
+
+# Install GKO
+helm install gravitee-gko gravitee/gko \
+  --namespace gravitee-system \
+  --create-namespace
 ```
 
-Or reference it from your main repository's workflow.
+### 2. Configure ArgoCD
 
-## 📊 Test Reports
+```bash
+# Apply ArgoCD configurations
+kubectl apply -f argocd/application-set.yaml
+kubectl apply -f argocd/rbac.yaml
+kubectl apply -f argocd/notifications.yaml
+```
 
-Test results are generated in various formats:
-- **JUnit XML**: For CI/CD integration
-- **HTML**: For human-readable reports
-- **JSON**: For programmatic processing
+### 3. Create a New API
 
-Results are stored in the `results/` directory (created at runtime).
+```bash
+# Copy templates
+cp templates/api-definition-template.yaml apis/base/my-api/api-definition.yaml
+cp templates/api-plan-template.yaml apis/base/my-api/api-plan.yaml
+
+# Edit and customize
+# Replace all {{PLACEHOLDER}} values
+
+# Commit and push
+git add apis/base/my-api/
+git commit -m "feat: add my-api definition"
+git push origin develop
+```
+
+### 4. Deploy to Environment
+
+ArgoCD will automatically sync changes:
+
+- **Dev**: Auto-sync on push to `develop`
+- **UAT**: Auto-sync on push to `develop`
+- **Prod**: Manual sync after merge to `main`
+
+## 📋 Workflows
+
+### CI Pipeline (`api-gitops-ci.yaml`)
+
+Triggered on every push/PR:
+
+1. **YAML Lint** - Validate YAML syntax
+2. **CRD Validation** - Validate Kubernetes and GKO CRDs
+3. **OpenAPI Validation** - Lint embedded OpenAPI specs
+4. **Security Scan** - Check for sensitive data and misconfigurations
+5. **Policy Validation** - Verify rate limits and security policies
+6. **GitOps Diff** - Show changes in PR comments
+
+### Promotion Workflow (`api-promotion.yaml`)
+
+Promote APIs between environments:
+
+```bash
+gh workflow run api-promotion.yaml \
+  -f api_name=users-api \
+  -f source_env=uat \
+  -f target_env=prod \
+  -f version=1.2.0 \
+  -f change_description="Added user preferences endpoint"
+```
+
+### Rollback Workflow (`api-rollback.yaml`)
+
+Rollback to previous version:
+
+```bash
+gh workflow run api-rollback.yaml \
+  -f api_name=users-api \
+  -f environment=prod \
+  -f reason="Performance regression"
+```
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GATEWAY_URL` | Gravitee Gateway URL | `http://localhost:8082` |
-| `ENVIRONMENT` | Target environment | `dev` |
-| `API_KEY` | API key for authentication | - |
-| `VUS` | Virtual users for load tests | `10` |
-| `DURATION` | Test duration | `30s` |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GRAVITEE_MGMT_URL` | Management API URL | Yes |
+| `GRAVITEE_MGMT_TOKEN` | Management API token | Yes |
+| `ARGOCD_SERVER` | ArgoCD server URL | Yes |
+| `ARGOCD_TOKEN` | ArgoCD API token | Yes |
+| `SLACK_WEBHOOK_URL` | Slack notifications | No |
 
-### Thresholds
+### Secrets
 
-Performance thresholds are defined in:
-- `tests/performance/load-test.js` - k6 threshold configuration
-- `scripts/check-performance-thresholds.py` - Custom threshold validation
+Configure these secrets in GitHub:
+
+- `GRAVITEE_MGMT_TOKEN` - Gravitee Management API token
+- `ARGOCD_TOKEN` - ArgoCD API token
+- `SLACK_WEBHOOK_URL` - Slack webhook for notifications
+
+## 🔒 Security
+
+### Secrets Management
+
+Production secrets are managed via External Secrets Operator:
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: gravitee-admin-credentials
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-backend
+  data:
+    - secretKey: GRAVITEE_PASSWORD
+      remoteRef:
+        key: gravitee/production/admin
+        property: password
+```
+
+### Network Policies
+
+Production deployments include network policies restricting traffic:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gravitee-apis-network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # ... restricted access rules
+```
+
+## 📊 Monitoring
+
+### ArgoCD Dashboard
+
+Monitor sync status at: `https://<argocd-server>/applications`
+
+### Key Metrics
+
+- Sync success/failure rate
+- Time to deploy
+- Rollback frequency
+- API error rates
 
 ## 📚 Documentation
 
-For detailed information about the testing strategy, see:
-- [API Testing Strategy](docs/API_TESTING_STRATEGY.md)
+- [GitOps Guide](docs/GITOPS_GUIDE.md) - Detailed GitOps workflow documentation
+- [Multi-Repo Guide](docs/MULTI_REPO_GUIDE.md) - Team-based multi-repository setup
+- [API Testing Strategy](api-testing/docs/API_TESTING_STRATEGY.md) - Comprehensive testing documentation
+- [API Templates](templates/) - Templates for creating new APIs
+- [ArgoCD Configuration](argocd/) - ArgoCD setup and RBAC
 
 ## 🤝 Contributing
 
-1. Add new test collections to the appropriate folder
-2. Update environment files with new variables
-3. Document new tests in this README
-4. Ensure tests pass locally before committing
+1. Create a feature branch from `develop`
+2. Make changes to API definitions
+3. Run validation locally: `python scripts/validate-gko-crds.py apis/`
+4. Create a Pull Request
+5. Wait for CI checks and review
+6. Merge to `develop` for Dev/UAT deployment
+7. Use promotion workflow for production
+
+## 🧪 API Testing Strategy
+
+Comprehensive testing runs automatically after APIs are published. All testing resources are isolated in the `api-testing/` folder.
+
+| Test Type | Trigger | Duration |
+|-----------|---------|----------|
+| **Smoke Tests** | Post-deploy | < 1 min |
+| **Functional Tests** | Post-deploy | 5-10 min |
+| **Contract Tests** | Post-deploy | 2-5 min |
+| **Security Tests** | Nightly | 15-30 min |
+| **Performance Tests** | Weekly | 30-60 min |
+
+See [API Testing Strategy](api-testing/docs/API_TESTING_STRATEGY.md) for details, or check the [API Testing README](api-testing/README.md) for quick start.
+
+## 📄 License
+
+Apache 2.0
 

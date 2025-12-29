@@ -1,0 +1,84 @@
+# My API Definition
+# Owner: My Team (my-team@example.com)
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: my-api
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: my-api
+    app.kubernetes.io/component: api
+    team: my-team  # Change to your team
+  annotations:
+    api.gravitee.io/owner: "my-team"
+    api.gravitee.io/contact: "my-team@example.com"
+    api.gravitee.io/slack: "#my-team-api"
+spec:
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "My API"
+  version: "1.0.0"
+  description: "My API description"
+  
+  visibility: PRIVATE
+  lifecycleState: PUBLISHED
+  state: STARTED
+  
+  categories:
+    - "My Category"
+  
+  tags:
+    - "my-api"
+    - "my-team"
+  
+  proxy:
+    virtualHosts:
+      - path: /api/v1/my-resource
+        overrideEntrypoint: true
+    
+    groups:
+      - name: default-group
+        endpoints:
+          - name: my-service
+            # Base URL - will be overridden per environment
+            target: http://my-service.my-team.svc.cluster.local:8080
+            weight: 1
+            type: http
+        
+        loadBalancer:
+          type: ROUND_ROBIN
+        
+        http:
+          connectTimeout: 5000
+          readTimeout: 10000
+          useCompression: true
+  
+  flowMode: DEFAULT
+  
+  flows:
+    - name: "All Requests"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      
+      pre:
+        - name: "Rate Limiting"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 100
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  analytics:
+    enabled: true
+    logging:
+      mode: CLIENT_PROXY
+      content: HEADERS
+      scope: REQUEST_RESPONSE
+

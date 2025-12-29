@@ -1,0 +1,101 @@
+# Products API Plans
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: products-api-keyless-plan
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: products-api-keyless-plan
+    app.kubernetes.io/component: api-plan
+    api.gravitee.io/api: products-api
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  apiRef:
+    name: products-api
+    namespace: gravitee-apis
+  
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Public Access"
+  description: "Keyless public access for product browsing"
+  
+  order: 1
+  security: KEY_LESS  # No authentication required
+  status: PUBLISHED
+  validation: AUTO
+  
+  flows:
+    - name: "Public Rate Limit"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        - name: "IP Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 50
+              periodTime: 1
+              periodTimeUnit: MINUTES
+            key: "{#request.remoteAddress}"
+  
+  characteristics:
+    - "No authentication required"
+    - "50 requests/minute per IP"
+    - "Read-only access"
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: products-api-partner-plan
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: products-api-partner-plan
+    app.kubernetes.io/component: api-plan
+    api.gravitee.io/api: products-api
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  apiRef:
+    name: products-api
+    namespace: gravitee-apis
+  
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Partner Plan"
+  description: "Enhanced access for partners with higher limits"
+  
+  order: 2
+  security: API_KEY
+  status: PUBLISHED
+  validation: MANUAL
+  
+  flows:
+    - name: "Partner Limits"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        - name: "Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 500
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  characteristics:
+    - "500 requests/minute"
+    - "Partner support"
+    - "Bulk operations"
+

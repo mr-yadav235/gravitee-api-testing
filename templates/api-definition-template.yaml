@@ -1,0 +1,219 @@
+# API Definition Template for Gravitee Kubernetes Operator
+# Use this template to create new API definitions
+# 
+# Instructions:
+# 1. Copy this file to apis/base/<api-name>/api-definition.yaml
+# 2. Replace all {{PLACEHOLDER}} values
+# 3. Customize flows and policies as needed
+# 4. Create corresponding api-plan.yaml
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: "{{API_NAME}}"  # e.g., users-api, orders-api
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: "{{API_NAME}}"
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "{{API_VERSION}}"
+    api.gravitee.io/category: "{{CATEGORY}}"  # e.g., user-management, e-commerce
+    api.gravitee.io/version: v1
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    api.gravitee.io/description: "{{API_DESCRIPTION}}"
+    api.gravitee.io/owner: "{{TEAM_NAME}}"
+    api.gravitee.io/contact: "{{TEAM_EMAIL}}"
+spec:
+  # Management Context Reference
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  # API Basic Information
+  name: "{{API_DISPLAY_NAME}}"  # e.g., "Users API"
+  version: "{{API_VERSION}}"     # e.g., "1.0.0" (semver)
+  description: "{{API_DESCRIPTION}}"
+  
+  # Visibility: PUBLIC (visible in portal) or PRIVATE (hidden)
+  visibility: PRIVATE
+  
+  # Lifecycle: CREATED, PUBLISHED, UNPUBLISHED, DEPRECATED
+  lifecycleState: PUBLISHED
+  
+  # State: STARTED or STOPPED
+  state: STARTED
+  
+  # Categories for organization in portal
+  categories:
+    - "{{CATEGORY}}"
+  
+  # Tags for filtering and search
+  tags:
+    - "{{TAG_1}}"
+    - "{{TAG_2}}"
+  
+  # Labels for internal organization
+  labels:
+    - "internal"
+  
+  # Proxy Configuration
+  proxy:
+    # Virtual hosts define the API entry points
+    virtualHosts:
+      - path: /api/v1/{{API_PATH}}  # e.g., /api/v1/users
+        overrideEntrypoint: true
+    
+    # Backend endpoint groups
+    groups:
+      - name: default-group
+        endpoints:
+          - name: "{{BACKEND_NAME}}"
+            target: "{{BACKEND_URL}}"  # e.g., http://users-service.backend.svc.cluster.local:8080
+            weight: 1
+            backup: false
+            type: http
+            inherit: true
+        
+        # Load balancing strategy
+        loadBalancer:
+          type: ROUND_ROBIN  # ROUND_ROBIN, RANDOM, WEIGHTED_ROUND_ROBIN, WEIGHTED_RANDOM
+        
+        # HTTP client configuration
+        http:
+          connectTimeout: 5000      # Connection timeout in ms
+          idleTimeout: 60000        # Idle timeout in ms
+          maxConcurrentConnections: 100
+          readTimeout: 10000        # Read timeout in ms
+          useCompression: true
+          followRedirects: false
+        
+        # SSL/TLS configuration (uncomment if needed)
+        # ssl:
+        #   trustAll: false
+        #   hostnameVerifier: true
+        #   trustStore:
+        #     type: PEM
+        #     content: "{{TRUST_STORE_CONTENT}}"
+  
+  # Flow mode: DEFAULT or BEST_MATCH
+  flowMode: DEFAULT
+  
+  # Request/Response flows with policies
+  flows:
+    # Global flow applied to all requests
+    - name: "All Requests"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      
+      # Pre-request policies (executed before backend call)
+      pre:
+        # Rate Limiting
+        - name: "Rate Limiting"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 100                    # Requests allowed
+              periodTime: 1                 # Time period
+              periodTimeUnit: MINUTES       # SECONDS, MINUTES, HOURS, DAYS
+            key: "{#request.headers['X-Gravitee-Api-Key']}"
+        
+        # Add Correlation ID
+        - name: "Add Correlation ID"
+          policy: transform-headers
+          enabled: true
+          configuration:
+            scope: REQUEST
+            addHeaders:
+              - name: X-Correlation-ID
+                value: "{#request.id}"
+      
+      # Post-response policies (executed after backend response)
+      post:
+        # Add response headers
+        - name: "Add Response Headers"
+          policy: transform-headers
+          enabled: true
+          configuration:
+            scope: RESPONSE
+            addHeaders:
+              - name: X-Response-Time
+                value: "{#response.time}ms"
+              - name: X-Api-Version
+                value: "{{API_VERSION}}"
+    
+    # Add specific flows for different paths/methods as needed
+    # Example: POST-specific flow with validation
+    # - name: "Create Resource"
+    #   pathOperator:
+    #     path: /
+    #     operator: EQUALS
+    #   methods:
+    #     - POST
+    #   enabled: true
+    #   pre:
+    #     - name: "Validate Payload"
+    #       policy: json-validation
+    #       enabled: true
+    #       configuration:
+    #         scope: REQUEST
+    #         schema: |
+    #           {
+    #             "$schema": "http://json-schema.org/draft-07/schema#",
+    #             "type": "object",
+    #             "required": ["field1", "field2"],
+    #             "properties": {
+    #               "field1": {"type": "string"},
+    #               "field2": {"type": "integer"}
+    #             }
+    #           }
+  
+  # Response templates for error handling
+  responseTemplates:
+    API_KEY_MISSING:
+      - statusCode: 401
+        body: '{"error": "API key is required", "code": "API_KEY_MISSING"}'
+        headers:
+          Content-Type: application/json
+    
+    RATE_LIMIT_TOO_MANY_REQUESTS:
+      - statusCode: 429
+        body: '{"error": "Rate limit exceeded", "code": "RATE_LIMIT_EXCEEDED"}'
+        headers:
+          Content-Type: application/json
+          Retry-After: "60"
+    
+    DEFAULT:
+      - statusCode: 500
+        body: '{"error": "Internal server error", "code": "INTERNAL_ERROR"}'
+        headers:
+          Content-Type: application/json
+  
+  # Dynamic properties (can be updated without redeployment)
+  properties:
+    - key: backend-url
+      value: "{{BACKEND_URL}}"
+      dynamic: false
+      encrypted: false
+  
+  # Analytics and logging configuration
+  analytics:
+    enabled: true
+    logging:
+      mode: CLIENT_PROXY  # NONE, CLIENT, PROXY, CLIENT_PROXY
+      content: HEADERS    # NONE, HEADERS, PAYLOADS
+      scope: REQUEST_RESPONSE  # REQUEST, RESPONSE, REQUEST_RESPONSE
+      # Only log when debug header is present (for production)
+      condition: "{#request.headers['X-Debug'] == 'true'}"
+  
+  # Metadata for documentation
+  metadata:
+    - name: team
+      value: "{{TEAM_NAME}}"
+      format: STRING
+    - name: documentation
+      value: "{{DOCS_URL}}"
+      format: URL
+

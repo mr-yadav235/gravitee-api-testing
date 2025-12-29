@@ -1,0 +1,61 @@
+# Network Policies for Production API Definitions
+# Restricts network access for security
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gravitee-apis-network-policy
+  namespace: gravitee-apis-prod
+  labels:
+    app.kubernetes.io/name: gravitee-apis
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}  # Applies to all pods in namespace
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  ingress:
+    # Allow from Gravitee Gateway
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: gravitee-apim
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gravitee-gateway
+      ports:
+        - protocol: TCP
+          port: 8082
+    
+    # Allow from ArgoCD for GitOps sync
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd
+  
+  egress:
+    # Allow to Gravitee Management API
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: gravitee-apim
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gravitee-management-api
+      ports:
+        - protocol: TCP
+          port: 8083
+    
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+

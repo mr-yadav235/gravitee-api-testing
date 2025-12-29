@@ -1,0 +1,214 @@
+# API Plan Template for Gravitee Kubernetes Operator
+# Use this template to create API plans (subscription tiers)
+# 
+# Instructions:
+# 1. Copy this file to apis/base/<api-name>/api-plan.yaml
+# 2. Replace all {{PLACEHOLDER}} values
+# 3. Customize security and rate limits as needed
+# 4. Create multiple plans for different tiers
+---
+# Free/Basic Plan
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: "{{API_NAME}}-free-plan"
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: "{{API_NAME}}-free-plan"
+    app.kubernetes.io/component: api-plan
+    api.gravitee.io/api: "{{API_NAME}}"
+    api.gravitee.io/tier: free
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  # Reference to the API this plan belongs to
+  apiRef:
+    name: "{{API_NAME}}"
+    namespace: gravitee-apis
+  
+  # Reference to ManagementContext
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  # Plan details
+  name: "Free Plan"
+  description: "Free tier with limited access"
+  
+  # Display order in portal (lower = first)
+  order: 1
+  
+  # Security type:
+  # - API_KEY: Requires API key header
+  # - JWT: Requires JWT token
+  # - OAUTH2: Requires OAuth2 token
+  # - KEY_LESS: No authentication (public)
+  # - MTLS: Mutual TLS
+  security: API_KEY
+  
+  # Plan status: STAGING, PUBLISHED, DEPRECATED, CLOSED
+  status: PUBLISHED
+  
+  # Subscription validation: AUTO (immediate) or MANUAL (requires approval)
+  validation: AUTO
+  
+  # Rate limiting and quota for this plan
+  flows:
+    - name: "Free Tier Limits"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        # Daily quota
+        - name: "Daily Quota"
+          policy: quota
+          enabled: true
+          configuration:
+            quota:
+              limit: 100              # Total requests allowed
+              periodTime: 1           # Time period
+              periodTimeUnit: DAYS    # SECONDS, MINUTES, HOURS, DAYS, WEEKS, MONTHS
+            key: "{#subscription.id}"
+        
+        # Per-minute rate limit
+        - name: "Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 10
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  # Plan characteristics shown in portal
+  characteristics:
+    - "100 requests/day"
+    - "10 requests/minute"
+    - "Community support"
+---
+# Standard Plan
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: "{{API_NAME}}-standard-plan"
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: "{{API_NAME}}-standard-plan"
+    app.kubernetes.io/component: api-plan
+    api.gravitee.io/api: "{{API_NAME}}"
+    api.gravitee.io/tier: standard
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  apiRef:
+    name: "{{API_NAME}}"
+    namespace: gravitee-apis
+  
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Standard Plan"
+  description: "Standard tier for production workloads"
+  
+  order: 2
+  security: API_KEY
+  status: PUBLISHED
+  validation: MANUAL  # Requires approval
+  
+  flows:
+    - name: "Standard Tier Limits"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        - name: "Daily Quota"
+          policy: quota
+          enabled: true
+          configuration:
+            quota:
+              limit: 10000
+              periodTime: 1
+              periodTimeUnit: DAYS
+            key: "{#subscription.id}"
+        
+        - name: "Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 100
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  characteristics:
+    - "10,000 requests/day"
+    - "100 requests/minute"
+    - "Email support"
+    - "SLA: 99.5%"
+---
+# Enterprise Plan (JWT-based)
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: "{{API_NAME}}-enterprise-plan"
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: "{{API_NAME}}-enterprise-plan"
+    app.kubernetes.io/component: api-plan
+    api.gravitee.io/api: "{{API_NAME}}"
+    api.gravitee.io/tier: enterprise
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  apiRef:
+    name: "{{API_NAME}}"
+    namespace: gravitee-apis
+  
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Enterprise Plan"
+  description: "Enterprise tier with premium features"
+  
+  order: 3
+  security: JWT
+  status: PUBLISHED
+  validation: MANUAL
+  
+  # JWT security configuration
+  securityDefinition: |
+    {
+      "signature": "RSA_RS256",
+      "publicKeyResolver": "JWKS_URL",
+      "jwksUrl": "{{JWKS_URL}}",
+      "userClaim": "sub",
+      "clientIdClaim": "azp"
+    }
+  
+  flows:
+    - name: "Enterprise Tier Limits"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        - name: "Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 1000
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  characteristics:
+    - "Unlimited requests"
+    - "1,000 requests/minute"
+    - "24/7 Premium support"
+    - "SLA: 99.99%"
+    - "Dedicated support engineer"
+

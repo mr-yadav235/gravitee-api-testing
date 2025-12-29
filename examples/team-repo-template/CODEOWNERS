@@ -1,0 +1,9 @@
+# CODEOWNERS for Team API Repository
+# Update with your team's GitHub handles
+
+# Default owners - your team
+* @my-team @my-team-leads
+
+# Production changes require additional approval
+/apis/overlays/prod/ @my-team-leads @sre-team
+

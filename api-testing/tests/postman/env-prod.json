@@ -1,0 +1,31 @@
+{
+  "id": "env-prod",
+  "name": "Production",
+  "values": [
+    {
+      "key": "GATEWAY_URL",
+      "value": "https://api.example.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "API_KEY",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "ENVIRONMENT",
+      "value": "prod",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "TIMEOUT",
+      "value": "10000",
+      "type": "default",
+      "enabled": true
+    }
+  ]
+}
+

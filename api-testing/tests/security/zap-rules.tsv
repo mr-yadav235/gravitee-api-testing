@@ -1,0 +1,30 @@
+# OWASP ZAP Rules Configuration
+# Format: Rule ID	Action	Description
+# Actions: IGNORE, WARN, FAIL
+
+# Information Disclosure
+10021	WARN	X-Content-Type-Options Header Missing
+10038	WARN	Content Security Policy Header Not Set
+10036	WARN	Server Leaks Version Information
+
+# Authentication
+10010	FAIL	Cookie No HttpOnly Flag
+10011	FAIL	Cookie Without Secure Flag
+10054	FAIL	Cookie without SameSite Attribute
+
+# Injection
+40012	FAIL	Cross Site Scripting (Reflected)
+40014	FAIL	Cross Site Scripting (Persistent)
+40018	FAIL	SQL Injection
+90019	FAIL	Server Side Include
+90020	FAIL	Remote OS Command Injection
+
+# Sensitive Data
+10017	FAIL	Cross-Domain JavaScript Source File Inclusion
+10040	WARN	Secure Pages Include Mixed Content
+
+# API Specific
+100001	FAIL	Broken Object Level Authorization
+100002	FAIL	Broken Authentication
+100003	FAIL	Excessive Data Exposure
+

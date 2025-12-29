@@ -1,0 +1,170 @@
+# Orders API Definition
+# Owner: Commerce Team (commerce-team@example.com)
+# Slack: #commerce-team-api
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: orders-api
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: orders-api
+    app.kubernetes.io/component: api
+    api.gravitee.io/category: e-commerce
+    api.gravitee.io/version: v1
+    team: commerce-team
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    api.gravitee.io/description: "Order Management API"
+    api.gravitee.io/owner: "commerce-team"
+    api.gravitee.io/contact: "commerce-team@example.com"
+    api.gravitee.io/slack: "#commerce-team-api"
+    api.gravitee.io/oncall: "commerce-team-oncall"
+spec:
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Orders API"
+  version: "1.0.0"
+  description: "RESTful API for order management - Owned by Commerce Team"
+  
+  visibility: PRIVATE
+  lifecycleState: PUBLISHED
+  state: STARTED
+  
+  categories:
+    - "E-Commerce"
+    - "Orders"
+  
+  tags:
+    - "orders"
+    - "commerce"
+    - "transactions"
+    - "commerce-team"
+  
+  proxy:
+    virtualHosts:
+      - path: /api/v1/orders
+        overrideEntrypoint: true
+    
+    groups:
+      - name: default-group
+        endpoints:
+          - name: orders-service
+            # Base URL - overridden per environment
+            target: http://orders-service.commerce-team.svc.cluster.local:8080
+            weight: 1
+            type: http
+        
+        loadBalancer:
+          type: ROUND_ROBIN
+        
+        http:
+          connectTimeout: 5000
+          idleTimeout: 60000
+          maxConcurrentConnections: 100
+          readTimeout: 30000  # Longer timeout for order processing
+          useCompression: true
+  
+  flowMode: DEFAULT
+  
+  flows:
+    - name: "All Requests"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      
+      pre:
+        - name: "Rate Limiting"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 50
+              periodTime: 1
+              periodTimeUnit: MINUTES
+        
+        - name: "Add Correlation ID"
+          policy: transform-headers
+          enabled: true
+          configuration:
+            scope: REQUEST
+            addHeaders:
+              - name: X-Correlation-ID
+                value: "{#request.id}"
+      
+      post:
+        - name: "Response Headers"
+          policy: transform-headers
+          enabled: true
+          configuration:
+            scope: RESPONSE
+            addHeaders:
+              - name: X-Api-Version
+                value: "1.0.0"
+    
+    # Order creation with validation
+    - name: "Create Order"
+      pathOperator:
+        path: /
+        operator: EQUALS
+      methods:
+        - POST
+      enabled: true
+      
+      pre:
+        - name: "Validate Order Payload"
+          policy: json-validation
+          enabled: true
+          configuration:
+            scope: REQUEST
+            schema: |
+              {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "required": ["customerId", "items"],
+                "properties": {
+                  "customerId": {"type": "string"},
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": ["productId", "quantity"],
+                      "properties": {
+                        "productId": {"type": "string"},
+                        "quantity": {"type": "integer", "minimum": 1}
+                      }
+                    }
+                  }
+                }
+              }
+            errorMessage: "Invalid order payload"
+  
+  responseTemplates:
+    DEFAULT:
+      - statusCode: 500
+        body: '{"error": "Order processing failed", "code": "ORDER_ERROR"}'
+        headers:
+          Content-Type: application/json
+  
+  analytics:
+    enabled: true
+    logging:
+      mode: CLIENT_PROXY
+      content: HEADERS
+      scope: REQUEST_RESPONSE
+  
+  metadata:
+    - name: team
+      value: commerce-team
+      format: STRING
+    - name: slack-channel
+      value: "#commerce-team-api"
+      format: STRING
+    - name: oncall
+      value: "commerce-team-oncall"
+      format: STRING
+

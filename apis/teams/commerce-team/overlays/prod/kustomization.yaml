@@ -1,0 +1,50 @@
+# Commerce Team - Production Environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: commerce-team-apis-prod
+
+namespace: gravitee-apis-prod
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: production
+  team: commerce-team
+
+patches:
+  # Production backend URL for Orders API
+  - target:
+      kind: ApiDefinition
+      name: orders-api
+    patch: |-
+      - op: replace
+        path: /spec/proxy/groups/0/endpoints/0/target
+        value: http://orders-service.commerce-team-prod.svc.cluster.local:8080
+      - op: add
+        path: /metadata/labels/environment
+        value: production
+      - op: replace
+        path: /spec/analytics/logging/mode
+        value: CLIENT_PROXY
+      - op: replace
+        path: /spec/analytics/logging/content
+        value: HEADERS
+      - op: replace
+        path: /spec/analytics/logging/condition
+        value: "{#request.headers['X-Debug'] == 'true'}"
+
+  # Update ManagementContext for production
+  - target:
+      kind: ManagementContext
+      name: gravitee-apim-context
+    patch: |-
+      - op: replace
+        path: /spec/baseUrl
+        value: http://gravitee-management-api.gravitee-apim-prod.svc.cluster.local:8083
+      - op: replace
+        path: /spec/environmentId
+        value: production
+

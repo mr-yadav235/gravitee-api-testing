@@ -1,0 +1,47 @@
+# ManagementContext - Connection to Gravitee APIM Management API
+# This CRD tells GKO how to connect to the Gravitee Management API
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ManagementContext
+metadata:
+  name: gravitee-apim-context
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: gravitee-management-context
+    app.kubernetes.io/component: configuration
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  # Base URL of Gravitee Management API
+  baseUrl: http://gravitee-management-api.gravitee-apim.svc.cluster.local:8083
+  # Environment and organization IDs
+  environmentId: DEFAULT
+  organizationId: DEFAULT
+  # Authentication configuration
+  auth:
+    # Reference to secret containing credentials
+    secretRef:
+      name: gravitee-admin-credentials
+      namespace: gravitee-apis
+    # Credentials keys in the secret
+    credentials:
+      username: GRAVITEE_USERNAME
+      password: GRAVITEE_PASSWORD
+---
+# Secret for Management API credentials
+# NOTE: In production, use External Secrets Operator or Sealed Secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gravitee-admin-credentials
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: gravitee-credentials
+    app.kubernetes.io/component: secrets
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+type: Opaque
+stringData:
+  GRAVITEE_USERNAME: admin
+  GRAVITEE_PASSWORD: "REPLACE_WITH_SEALED_SECRET"
+

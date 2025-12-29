@@ -1,0 +1,93 @@
+# Team API CI Pipeline
+# This runs in each team's repository
+name: API CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  SHARED_CONFIG_REPO: your-org/gravitee-shared-config
+
+jobs:
+  validate:
+    name: Validate API Definitions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install pyyaml
+      
+      - name: Download shared validation scripts
+        run: |
+          curl -sL -o scripts/validate-gko-crds.py \
+            https://raw.githubusercontent.com/${{ env.SHARED_CONFIG_REPO }}/main/scripts/validate-gko-crds.py
+          curl -sL -o scripts/validate-policies.py \
+            https://raw.githubusercontent.com/${{ env.SHARED_CONFIG_REPO }}/main/scripts/validate-policies.py
+      
+      - name: Install kustomize
+        run: |
+          curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz | tar xz
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Validate YAML syntax
+        run: |
+          pip install yamllint
+          yamllint apis/
+      
+      - name: Build and validate all environments
+        run: |
+          for env in dev uat prod; do
+            echo "=== Building $env ==="
+            kustomize build apis/overlays/$env > /tmp/manifests-$env.yaml
+            python3 scripts/validate-gko-crds.py /tmp/manifests-$env.yaml
+          done
+      
+      - name: Validate policies
+        run: python3 scripts/validate-policies.py apis/
+      
+      - name: Upload manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifests
+          path: /tmp/manifests-*.yaml
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: validate
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'apis/'
+          severity: 'CRITICAL,HIGH'
+
+  notify-argocd:
+    name: Notify ArgoCD
+    runs-on: ubuntu-latest
+    needs: [validate, security-scan]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Trigger sync notification
+        run: |
+          echo "ArgoCD will auto-sync based on Git changes"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+

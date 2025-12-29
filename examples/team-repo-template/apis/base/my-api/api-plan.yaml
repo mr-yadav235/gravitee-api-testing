@@ -1,0 +1,48 @@
+# My API Plans
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: my-api-standard-plan
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: my-api-standard-plan
+    api.gravitee.io/api: my-api
+    team: my-team
+spec:
+  apiRef:
+    name: my-api
+    namespace: gravitee-apis
+  
+  contextRef:
+    name: gravitee-apim-context
+    namespace: gravitee-apis
+  
+  name: "Standard Plan"
+  description: "Standard access"
+  
+  order: 1
+  security: API_KEY
+  status: PUBLISHED
+  validation: AUTO
+  
+  flows:
+    - name: "Standard Limits"
+      pathOperator:
+        path: /
+        operator: STARTS_WITH
+      enabled: true
+      pre:
+        - name: "Rate Limit"
+          policy: rate-limit
+          enabled: true
+          configuration:
+            rate:
+              limit: 100
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  characteristics:
+    - "100 requests/minute"
+    - "Standard support"
+

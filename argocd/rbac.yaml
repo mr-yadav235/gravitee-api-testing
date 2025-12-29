@@ -1,0 +1,120 @@
+# ArgoCD RBAC Configuration for Gravitee APIs
+# Defines access control for different teams
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  # Policy CSV for fine-grained access control
+  policy.csv: |
+    # API Developers - Can view all, sync dev/uat
+    p, role:api-developer, applications, get, gravitee-apis/*, allow
+    p, role:api-developer, applications, sync, gravitee-apis/gravitee-apis-dev, allow
+    p, role:api-developer, applications, sync, gravitee-apis/gravitee-apis-uat, allow
+    p, role:api-developer, applications, action/*, gravitee-apis/gravitee-apis-dev, allow
+    p, role:api-developer, applications, action/*, gravitee-apis/gravitee-apis-uat, allow
+    p, role:api-developer, logs, get, gravitee-apis/*, allow
+    p, role:api-developer, exec, create, gravitee-apis/gravitee-apis-dev/*, allow
+    
+    # API Reviewers - Can view all, approve UAT promotions
+    p, role:api-reviewer, applications, get, gravitee-apis/*, allow
+    p, role:api-reviewer, applications, sync, gravitee-apis/gravitee-apis-uat, allow
+    p, role:api-reviewer, logs, get, gravitee-apis/*, allow
+    
+    # API Admins - Full access to all environments
+    p, role:api-admin, applications, *, gravitee-apis/*, allow
+    p, role:api-admin, logs, get, gravitee-apis/*, allow
+    p, role:api-admin, exec, create, gravitee-apis/*, allow
+    
+    # Platform Team - Full access including production
+    p, role:platform-admin, applications, *, */*, allow
+    p, role:platform-admin, clusters, *, *, allow
+    p, role:platform-admin, repositories, *, *, allow
+    p, role:platform-admin, projects, *, *, allow
+    p, role:platform-admin, logs, get, */*, allow
+    p, role:platform-admin, exec, create, */*, allow
+    
+    # SRE Team - Read access + production sync
+    p, role:sre, applications, get, */*, allow
+    p, role:sre, applications, sync, gravitee-apis/gravitee-apis-prod, allow
+    p, role:sre, applications, action/*, gravitee-apis/gravitee-apis-prod, allow
+    p, role:sre, logs, get, */*, allow
+    
+    # Read-only role for auditors
+    p, role:auditor, applications, get, */*, allow
+    p, role:auditor, logs, get, */*, allow
+    p, role:auditor, projects, get, *, allow
+    
+    # Group mappings
+    g, api-developers, role:api-developer
+    g, api-reviewers, role:api-reviewer
+    g, api-admins, role:api-admin
+    g, platform-team, role:platform-admin
+    g, sre-team, role:sre
+    g, auditors, role:auditor
+    
+    # SSO group mappings (example for OIDC/LDAP)
+    g, oidc:api-developers, role:api-developer
+    g, oidc:api-admins, role:api-admin
+    g, oidc:platform-admins, role:platform-admin
+  
+  # Default policy for authenticated users
+  policy.default: role:readonly
+  
+  # Scopes for OIDC integration
+  scopes: '[groups, email]'
+---
+# ServiceAccount for ArgoCD API access
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-api-access
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-api-access
+---
+# ClusterRole for ArgoCD to manage Gravitee CRDs
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-gravitee-manager
+  labels:
+    app.kubernetes.io/name: argocd-gravitee-manager
+rules:
+  - apiGroups: ["gravitee.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets", "clustersecretstores", "secretstores"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# ClusterRoleBinding for ArgoCD
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-gravitee-manager-binding
+  labels:
+    app.kubernetes.io/name: argocd-gravitee-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: argocd-gravitee-manager
+subjects:
+  - kind: ServiceAccount
+    name: argocd-application-controller
+    namespace: argocd
+  - kind: ServiceAccount
+    name: argocd-server
+    namespace: argocd
+

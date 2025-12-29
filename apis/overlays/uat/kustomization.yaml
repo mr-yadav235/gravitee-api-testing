@@ -1,0 +1,104 @@
+# UAT Environment Overlay
+# Customizes base API definitions for UAT/staging environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: gravitee-apis-uat
+
+namespace: gravitee-apis-uat
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: uat
+  tier: non-production
+
+patches:
+  # Update ManagementContext for UAT environment
+  - target:
+      kind: ManagementContext
+      name: gravitee-apim-context
+    patch: |-
+      - op: replace
+        path: /spec/baseUrl
+        value: http://gravitee-management-api.gravitee-apim-uat.svc.cluster.local:8083
+      - op: replace
+        path: /spec/environmentId
+        value: uat
+
+  # UAT-specific rate limits (closer to production)
+  - target:
+      kind: ApiDefinition
+      name: users-api
+    patch: |-
+      - op: replace
+        path: /spec/flows/0/pre/0/configuration/rate/limit
+        value: 100
+      - op: add
+        path: /metadata/labels/environment
+        value: uat
+      - op: replace
+        path: /spec/analytics/logging/mode
+        value: CLIENT_PROXY
+      - op: replace
+        path: /spec/analytics/logging/content
+        value: HEADERS
+
+  # Update backend URLs for UAT
+  - target:
+      kind: ApiDefinition
+      name: users-api
+    patch: |-
+      - op: replace
+        path: /spec/proxy/groups/0/endpoints/0/target
+        value: http://users-service.backend-uat.svc.cluster.local:8080
+
+  - target:
+      kind: ApiDefinition
+      name: orders-api
+    patch: |-
+      - op: replace
+        path: /spec/proxy/groups/0/endpoints/0/target
+        value: http://orders-service.backend-uat.svc.cluster.local:8080
+      - op: add
+        path: /metadata/labels/environment
+        value: uat
+
+  - target:
+      kind: ApiDefinition
+      name: products-api
+    patch: |-
+      - op: replace
+        path: /spec/proxy/groups/0/endpoints/0/target
+        value: http://products-service.backend-uat.svc.cluster.local:8080
+      - op: add
+        path: /metadata/labels/environment
+        value: uat
+
+  # UAT plan quotas (production-like)
+  - target:
+      kind: ApiPlan
+      name: users-api-free-plan
+    patch: |-
+      - op: replace
+        path: /spec/flows/0/pre/0/configuration/quota/limit
+        value: 100
+
+configMapGenerator:
+  - name: gravitee-api-env-config
+    behavior: create
+    literals:
+      - ENVIRONMENT=uat
+      - LOG_LEVEL=INFO
+      - ANALYTICS_SAMPLING=50
+
+# UAT secrets - should use external secrets in real deployment
+secretGenerator:
+  - name: gravitee-admin-credentials
+    behavior: replace
+    literals:
+      - GRAVITEE_USERNAME=admin
+      - GRAVITEE_PASSWORD=SEALED_SECRET_PLACEHOLDER
+

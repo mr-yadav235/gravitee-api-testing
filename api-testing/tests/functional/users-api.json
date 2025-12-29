@@ -1,0 +1,384 @@
+{
+  "info": {
+    "name": "Users API Functional Tests",
+    "description": "Comprehensive functional tests for Users API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "GATEWAY_URL",
+      "value": "https://api.example.com"
+    },
+    {
+      "key": "API_KEY",
+      "value": ""
+    },
+    {
+      "key": "created_user_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "CRUD Operations",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "url": "{{GATEWAY_URL}}/api/v1/users",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test-{{$timestamp}}@example.com\",\n  \"name\": \"Test User\",\n  \"role\": \"USER\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has user ID', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('id');",
+                  "    pm.collectionVariables.set('created_user_id', json.id);",
+                  "});",
+                  "",
+                  "pm.test('Response has correct email', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.email).to.include('@example.com');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users/{{created_user_id}}",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has correct ID', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.id).to.equal(pm.collectionVariables.get('created_user_id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "url": "{{GATEWAY_URL}}/api/v1/users/{{created_user_id}}",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Test User\",\n  \"role\": \"ADMIN\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Name is updated', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.name).to.equal('Updated Test User');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": "{{GATEWAY_URL}}/api/v1/users/{{created_user_id}}",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204', () => {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Deleted User - Should 404",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users/{{created_user_id}}",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 404', () => {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Query Parameters",
+      "item": [
+        {
+          "name": "List Users with Pagination",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{GATEWAY_URL}}/api/v1/users?page=1&limit=10",
+              "host": ["{{GATEWAY_URL}}"],
+              "path": ["api", "v1", "users"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"}
+              ]
+            },
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is array with max 10 items', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "    pm.expect(json.length).to.be.at.most(10);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter Users by Role",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{GATEWAY_URL}}/api/v1/users?role=ADMIN",
+              "host": ["{{GATEWAY_URL}}"],
+              "path": ["api", "v1", "users"],
+              "query": [
+                {"key": "role", "value": "ADMIN"}
+              ]
+            },
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('All users have ADMIN role', () => {",
+                  "    const json = pm.response.json();",
+                  "    json.forEach(user => {",
+                  "        pm.expect(user.role).to.equal('ADMIN');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Handling",
+      "item": [
+        {
+          "name": "Invalid User ID - 404",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users/invalid-id-12345",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 404', () => {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Has error message', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid Payload - 400",
+          "request": {
+            "method": "POST",
+            "url": "{{GATEWAY_URL}}/api/v1/users",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invalid\": \"payload\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Has validation error', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rate Limiting",
+      "item": [
+        {
+          "name": "Rate Limit Test",
+          "request": {
+            "method": "GET",
+            "url": "{{GATEWAY_URL}}/api/v1/users",
+            "header": [
+              {
+                "key": "X-Gravitee-Api-Key",
+                "value": "{{API_KEY}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Has rate limit headers', () => {",
+                  "    pm.response.to.have.header('X-Rate-Limit-Limit');",
+                  "    pm.response.to.have.header('X-Rate-Limit-Remaining');",
+                  "    pm.response.to.have.header('X-Rate-Limit-Reset');",
+                  "});",
+                  "",
+                  "pm.test('Rate limit remaining is decreasing', () => {",
+                  "    const remaining = parseInt(pm.response.headers.get('X-Rate-Limit-Remaining'));",
+                  "    pm.expect(remaining).to.be.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

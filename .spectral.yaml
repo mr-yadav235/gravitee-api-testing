@@ -1,0 +1,98 @@
+# Spectral ruleset for OpenAPI validation
+# Used to lint OpenAPI specifications embedded in API definitions
+extends:
+  - spectral:oas
+
+rules:
+  # Severity overrides
+  operation-operationId: warn
+  operation-tags: warn
+  
+  # Custom rules for Gravitee APIs
+  
+  # Ensure all operations have descriptions
+  operation-description:
+    description: Operations should have descriptions
+    given: "$.paths.*[get,post,put,patch,delete]"
+    severity: warn
+    then:
+      field: description
+      function: truthy
+  
+  # Ensure all parameters have descriptions
+  parameter-description:
+    description: Parameters should have descriptions
+    given: "$.paths.*.*.parameters[*]"
+    severity: warn
+    then:
+      field: description
+      function: truthy
+  
+  # Ensure responses have descriptions
+  response-description:
+    description: Responses should have descriptions
+    given: "$.paths.*.*.responses.*"
+    severity: warn
+    then:
+      field: description
+      function: truthy
+  
+  # Ensure info section is complete
+  info-contact:
+    description: Info should have contact information
+    given: "$.info"
+    severity: info
+    then:
+      field: contact
+      function: truthy
+  
+  # Ensure security is defined
+  security-defined:
+    description: API should have security defined
+    given: "$"
+    severity: warn
+    then:
+      - field: security
+        function: truthy
+      - field: components.securitySchemes
+        function: truthy
+  
+  # Path naming conventions
+  path-kebab-case:
+    description: Paths should use kebab-case
+    given: "$.paths[*]~"
+    severity: warn
+    then:
+      function: pattern
+      functionOptions:
+        match: "^(/[a-z0-9-{}]+)+$"
+  
+  # Schema naming conventions
+  schema-pascal-case:
+    description: Schema names should use PascalCase
+    given: "$.components.schemas[*]~"
+    severity: info
+    then:
+      function: pattern
+      functionOptions:
+        match: "^[A-Z][a-zA-Z0-9]*$"
+  
+  # Ensure error responses are defined
+  error-response-defined:
+    description: Error responses (4xx, 5xx) should be defined
+    given: "$.paths.*.*.responses"
+    severity: warn
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          anyOf:
+            - required: ["400"]
+            - required: ["401"]
+            - required: ["404"]
+            - required: ["500"]
+  
+  # Disable some overly strict rules
+  oas3-api-servers: off
+  oas3-server-trailing-slash: off
+

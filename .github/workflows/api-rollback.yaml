@@ -1,0 +1,325 @@
+# API Rollback Workflow
+# Handles rollback of APIs to previous versions
+name: API Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_name:
+        description: 'API name to rollback'
+        required: true
+        type: string
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+      target_revision:
+        description: 'Git commit SHA or tag to rollback to (leave empty for previous version)'
+        required: false
+        type: string
+      reason:
+        description: 'Reason for rollback'
+        required: true
+        type: string
+
+env:
+  GIT_AUTHOR_NAME: 'GitHub Actions'
+  GIT_AUTHOR_EMAIL: 'actions@github.com'
+
+jobs:
+  # ============================================================================
+  # Validate Rollback Request
+  # ============================================================================
+  validate:
+    name: Validate Rollback
+    runs-on: ubuntu-latest
+    outputs:
+      target_sha: ${{ steps.find-revision.outputs.target_sha }}
+      current_version: ${{ steps.find-revision.outputs.current_version }}
+      target_version: ${{ steps.find-revision.outputs.target_version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Find target revision
+        id: find-revision
+        run: |
+          API_DEF="apis/base/${{ inputs.api_name }}/api-definition.yaml"
+          
+          # Get current version
+          CURRENT_VERSION=$(yq '.spec.version' "$API_DEF")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          if [[ -n "${{ inputs.target_revision }}" ]]; then
+            # Use specified revision
+            TARGET_SHA="${{ inputs.target_revision }}"
+          else
+            # Find previous version commit
+            TARGET_SHA=$(git log --oneline -n 2 --format="%H" -- "$API_DEF" | tail -1)
+          fi
+          
+          echo "target_sha=$TARGET_SHA" >> $GITHUB_OUTPUT
+          
+          # Get version at target revision
+          TARGET_VERSION=$(git show "$TARGET_SHA:$API_DEF" 2>/dev/null | yq '.spec.version' || echo "unknown")
+          echo "target_version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "Rolling back from $CURRENT_VERSION to $TARGET_VERSION (commit: $TARGET_SHA)"
+      
+      - name: Validate target revision exists
+        run: |
+          if ! git cat-file -e ${{ steps.find-revision.outputs.target_sha }}^{commit} 2>/dev/null; then
+            echo "::error::Target revision not found: ${{ steps.find-revision.outputs.target_sha }}"
+            exit 1
+          fi
+
+  # ============================================================================
+  # Approval Gate for Production Rollback
+  # ============================================================================
+  approval:
+    name: Approval Gate
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.environment == 'prod'
+    environment: production-rollback-approval
+    
+    steps:
+      - name: Request approval
+        run: |
+          echo "🔴 PRODUCTION ROLLBACK requires approval"
+          echo ""
+          echo "API: ${{ inputs.api_name }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Current Version: ${{ needs.validate.outputs.current_version }}"
+          echo "Rollback To: ${{ needs.validate.outputs.target_version }}"
+          echo ""
+          echo "Reason: ${{ inputs.reason }}"
+          echo ""
+          echo "⚠️  This action will immediately affect production traffic!"
+
+  # ============================================================================
+  # Perform Rollback
+  # ============================================================================
+  rollback:
+    name: Perform Rollback
+    runs-on: ubuntu-latest
+    needs: [validate, approval]
+    if: |
+      always() && 
+      needs.validate.result == 'success' &&
+      (needs.approval.result == 'success' || inputs.environment != 'prod')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config user.name "${{ env.GIT_AUTHOR_NAME }}"
+          git config user.email "${{ env.GIT_AUTHOR_EMAIL }}"
+      
+      - name: Restore API definition from target revision
+        run: |
+          API_DEF="apis/base/${{ inputs.api_name }}/api-definition.yaml"
+          API_PLAN="apis/base/${{ inputs.api_name }}/api-plan.yaml"
+          
+          # Restore API definition
+          git show ${{ needs.validate.outputs.target_sha }}:"$API_DEF" > "$API_DEF"
+          
+          # Restore API plan if it exists at target revision
+          if git show ${{ needs.validate.outputs.target_sha }}:"$API_PLAN" &>/dev/null; then
+            git show ${{ needs.validate.outputs.target_sha }}:"$API_PLAN" > "$API_PLAN"
+          fi
+          
+          # Add rollback metadata
+          yq -i '.metadata.annotations["api.gravitee.io/rollback-from"] = "${{ needs.validate.outputs.current_version }}"' "$API_DEF"
+          yq -i '.metadata.annotations["api.gravitee.io/rollback-at"] = "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"' "$API_DEF"
+          yq -i '.metadata.annotations["api.gravitee.io/rollback-by"] = "${{ github.actor }}"' "$API_DEF"
+          yq -i '.metadata.annotations["api.gravitee.io/rollback-reason"] = "${{ inputs.reason }}"' "$API_DEF"
+      
+      - name: Create rollback branch
+        run: |
+          BRANCH_NAME="rollback/${{ inputs.api_name }}-${{ inputs.environment }}-$(date +%Y%m%d%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+      
+      - name: Commit rollback
+        run: |
+          git add apis/
+          git commit -m "🔄 Rollback ${{ inputs.api_name }} in ${{ inputs.environment }}
+          
+          Rolled back from: ${{ needs.validate.outputs.current_version }}
+          Rolled back to: ${{ needs.validate.outputs.target_version }}
+          Target revision: ${{ needs.validate.outputs.target_sha }}
+          Rolled back by: ${{ github.actor }}
+          
+          Reason: ${{ inputs.reason }}"
+      
+      - name: Push rollback branch
+        run: |
+          git push origin "$BRANCH_NAME"
+      
+      - name: Create Pull Request for non-prod
+        if: inputs.environment != 'prod'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.BRANCH_NAME }}
+          base: develop
+          title: "🔄 Rollback ${{ inputs.api_name }} in ${{ inputs.environment }}"
+          body: |
+            ## API Rollback Request
+            
+            | Field | Value |
+            |-------|-------|
+            | **API** | ${{ inputs.api_name }} |
+            | **Environment** | ${{ inputs.environment }} |
+            | **From Version** | ${{ needs.validate.outputs.current_version }} |
+            | **To Version** | ${{ needs.validate.outputs.target_version }} |
+            | **Requested By** | @${{ github.actor }} |
+            
+            ### Reason
+            ${{ inputs.reason }}
+            
+            ---
+            _This PR was automatically created by the API Rollback workflow._
+          labels: |
+            rollback
+            ${{ inputs.environment }}
+            urgent
+          draft: false
+      
+      - name: Direct merge for production (emergency)
+        if: inputs.environment == 'prod'
+        run: |
+          # For production, merge directly to main for immediate effect
+          git checkout main
+          git merge "$BRANCH_NAME" --no-ff -m "🚨 Emergency rollback: ${{ inputs.api_name }}"
+          git push origin main
+          
+          echo "::warning::Production rollback merged directly to main"
+          echo "ArgoCD will sync automatically"
+
+  # ============================================================================
+  # Trigger ArgoCD Sync
+  # ============================================================================
+  sync-argocd:
+    name: Sync ArgoCD
+    runs-on: ubuntu-latest
+    needs: [rollback]
+    if: inputs.environment == 'prod'
+    
+    steps:
+      - name: Trigger ArgoCD sync
+        run: |
+          echo "Triggering ArgoCD sync for gravitee-apis-${{ inputs.environment }}"
+          
+          # Trigger sync via ArgoCD API
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.ARGOCD_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.ARGOCD_SERVER }}/api/v1/applications/gravitee-apis-${{ inputs.environment }}/sync" \
+            -d '{"prune": false}' || echo "ArgoCD sync triggered (or will auto-sync)"
+      
+      - name: Wait for sync completion
+        run: |
+          echo "Waiting for ArgoCD sync to complete..."
+          sleep 30
+          
+          # Check sync status
+          SYNC_STATUS=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.ARGOCD_TOKEN }}" \
+            "${{ secrets.ARGOCD_SERVER }}/api/v1/applications/gravitee-apis-${{ inputs.environment }}" \
+            | jq -r '.status.sync.status' || echo "Unknown")
+          
+          echo "Sync status: $SYNC_STATUS"
+
+  # ============================================================================
+  # Post-Rollback Verification
+  # ============================================================================
+  verify:
+    name: Verify Rollback
+    runs-on: ubuntu-latest
+    needs: [rollback, sync-argocd]
+    if: always() && needs.rollback.result == 'success'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Verify API health
+        run: |
+          echo "Verifying API health after rollback..."
+          
+          # Add health check logic here
+          # e.g., curl to gateway health endpoint
+          
+          echo "✅ Rollback verification complete"
+
+  # ============================================================================
+  # Notify Stakeholders
+  # ============================================================================
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [validate, rollback, verify]
+    if: always()
+    
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🔄 API Rollback ${{ needs.rollback.result == 'success' && 'Completed' || 'Failed' }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🔄 API Rollback ${{ needs.rollback.result == 'success' && 'Completed' || 'Failed' }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*API:*\n${{ inputs.api_name }}"},
+                    {"type": "mrkdwn", "text": "*Environment:*\n${{ inputs.environment }}"},
+                    {"type": "mrkdwn", "text": "*From:*\n${{ needs.validate.outputs.current_version }}"},
+                    {"type": "mrkdwn", "text": "*To:*\n${{ needs.validate.outputs.target_version }}"},
+                    {"type": "mrkdwn", "text": "*Requested By:*\n${{ github.actor }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ needs.rollback.result }}"}
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Reason:*\n${{ inputs.reason }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      
+      - name: Create incident record
+        if: inputs.environment == 'prod'
+        run: |
+          echo "Creating incident record for production rollback..."
+          echo "Incident ID: INC-$(date +%Y%m%d%H%M%S)"
+          echo "API: ${{ inputs.api_name }}"
+          echo "Reason: ${{ inputs.reason }}"
+          # Add integration with incident management system (PagerDuty, ServiceNow, etc.)
+

@@ -1,0 +1,31 @@
+{
+  "id": "env-uat",
+  "name": "UAT",
+  "values": [
+    {
+      "key": "GATEWAY_URL",
+      "value": "https://api.uat.example.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "API_KEY",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "ENVIRONMENT",
+      "value": "uat",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "TIMEOUT",
+      "value": "15000",
+      "type": "default",
+      "enabled": true
+    }
+  ]
+}
+

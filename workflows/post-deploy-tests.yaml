@@ -1,0 +1,478 @@
+# Post-Deployment API Testing Pipeline
+# Runs after APIs are published to Gravitee APIM Gateway
+name: Post-Deployment API Tests
+
+on:
+  # Triggered by ArgoCD webhook after successful sync
+  repository_dispatch:
+    types: [api-deployed]
+  
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test'
+        required: true
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+      api_name:
+        description: 'API name to test (leave empty for all)'
+        required: false
+        type: string
+      test_types:
+        description: 'Test types to run'
+        required: true
+        type: choice
+        options:
+          - all
+          - smoke
+          - functional
+          - contract
+          - security
+          - performance
+  
+  # Scheduled tests
+  schedule:
+    # Nightly security scans at 2 AM UTC
+    - cron: '0 2 * * *'
+    # Weekly performance tests on Saturday 3 AM UTC
+    - cron: '0 3 * * 6'
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ============================================================================
+  # Setup and Configuration
+  # ============================================================================
+  setup:
+    name: Setup Test Environment
+    runs-on: ubuntu-latest
+    outputs:
+      gateway_url: ${{ steps.config.outputs.gateway_url }}
+      environment: ${{ steps.config.outputs.environment }}
+      api_name: ${{ steps.config.outputs.api_name }}
+      run_smoke: ${{ steps.config.outputs.run_smoke }}
+      run_functional: ${{ steps.config.outputs.run_functional }}
+      run_contract: ${{ steps.config.outputs.run_contract }}
+      run_security: ${{ steps.config.outputs.run_security }}
+      run_performance: ${{ steps.config.outputs.run_performance }}
+    
+    steps:
+      - name: Determine configuration
+        id: config
+        run: |
+          # Set environment
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            ENV="${{ github.event.client_payload.environment }}"
+            API="${{ github.event.client_payload.api_name }}"
+          elif [ "${{ github.event_name }}" == "schedule" ]; then
+            ENV="uat"
+            API=""
+          else
+            ENV="${{ inputs.environment }}"
+            API="${{ inputs.api_name }}"
+          fi
+          
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "api_name=$API" >> $GITHUB_OUTPUT
+          
+          # Set gateway URL based on environment
+          case $ENV in
+            dev)
+              echo "gateway_url=https://api.dev.example.com" >> $GITHUB_OUTPUT
+              ;;
+            uat)
+              echo "gateway_url=https://api.uat.example.com" >> $GITHUB_OUTPUT
+              ;;
+            prod)
+              echo "gateway_url=https://api.example.com" >> $GITHUB_OUTPUT
+              ;;
+          esac
+          
+          # Determine which tests to run
+          TEST_TYPES="${{ inputs.test_types || 'all' }}"
+          
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            # Scheduled: determine by cron
+            if [ "$(date +%u)" == "6" ]; then
+              # Saturday - performance tests
+              TEST_TYPES="performance"
+            else
+              # Other days - security tests
+              TEST_TYPES="security"
+            fi
+          fi
+          
+          if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "smoke" ]; then
+            echo "run_smoke=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_smoke=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "functional" ]; then
+            echo "run_functional=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_functional=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "contract" ]; then
+            echo "run_contract=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_contract=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "security" ]; then
+            echo "run_security=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_security=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "performance" ]; then
+            echo "run_performance=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_performance=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
+  # Smoke Tests
+  # ============================================================================
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run_smoke == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+      
+      - name: Run smoke tests
+        run: |
+          newman run tests/postman/smoke-tests.json \
+            --environment tests/postman/env-${{ needs.setup.outputs.environment }}.json \
+            --env-var "GATEWAY_URL=${{ needs.setup.outputs.gateway_url }}" \
+            --env-var "API_KEY=${{ secrets.TEST_API_KEY }}" \
+            --reporters cli,htmlextra,junit \
+            --reporter-htmlextra-export reports/smoke-tests.html \
+            --reporter-junit-export reports/smoke-tests.xml \
+            --timeout-request 10000
+        env:
+          GATEWAY_URL: ${{ needs.setup.outputs.gateway_url }}
+      
+      - name: Upload smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results
+          path: reports/
+          retention-days: 14
+      
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Smoke Test Results
+          path: reports/smoke-tests.xml
+          reporter: java-junit
+
+  # ============================================================================
+  # Functional Tests
+  # ============================================================================
+  functional-tests:
+    name: Functional Tests
+    runs-on: ubuntu-latest
+    needs: [setup, smoke-tests]
+    if: needs.setup.outputs.run_functional == 'true' && (needs.smoke-tests.result == 'success' || needs.smoke-tests.result == 'skipped')
+    
+    strategy:
+      matrix:
+        api: [users-api, orders-api, products-api]
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+      
+      - name: Check if API tests exist
+        id: check-tests
+        run: |
+          if [ -f "tests/functional/${{ matrix.api }}.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run functional tests for ${{ matrix.api }}
+        if: steps.check-tests.outputs.exists == 'true'
+        run: |
+          newman run tests/functional/${{ matrix.api }}.json \
+            --environment tests/postman/env-${{ needs.setup.outputs.environment }}.json \
+            --env-var "GATEWAY_URL=${{ needs.setup.outputs.gateway_url }}" \
+            --env-var "API_KEY=${{ secrets.TEST_API_KEY }}" \
+            --reporters cli,htmlextra,junit \
+            --reporter-htmlextra-export reports/functional-${{ matrix.api }}.html \
+            --reporter-junit-export reports/functional-${{ matrix.api }}.xml \
+            --iteration-count 1
+      
+      - name: Upload functional test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: functional-test-results-${{ matrix.api }}
+          path: reports/
+          retention-days: 14
+
+  # ============================================================================
+  # Contract Tests
+  # ============================================================================
+  contract-tests:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    needs: [setup, smoke-tests]
+    if: needs.setup.outputs.run_contract == 'true' && (needs.smoke-tests.result == 'success' || needs.smoke-tests.result == 'skipped')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install schemathesis pytest pytest-html requests pyyaml
+      
+      - name: Run contract tests
+        run: |
+          python -m pytest tests/contract/ \
+            -v \
+            --html=reports/contract-tests.html \
+            --self-contained-html \
+            --junitxml=reports/contract-tests.xml \
+            --tb=short
+        env:
+          GATEWAY_URL: ${{ needs.setup.outputs.gateway_url }}
+          API_KEY: ${{ secrets.TEST_API_KEY }}
+      
+      - name: Run Schemathesis tests
+        run: |
+          for spec in tests/contract/openapi/*.yaml; do
+            if [ -f "$spec" ]; then
+              api_name=$(basename "$spec" .yaml)
+              echo "Testing $api_name against OpenAPI spec..."
+              schemathesis run "$spec" \
+                --base-url "${{ needs.setup.outputs.gateway_url }}" \
+                --header "X-Gravitee-Api-Key: ${{ secrets.TEST_API_KEY }}" \
+                --checks all \
+                --max-examples 50 \
+                --report reports/schemathesis-$api_name.html || true
+            fi
+          done
+      
+      - name: Upload contract test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contract-test-results
+          path: reports/
+          retention-days: 14
+
+  # ============================================================================
+  # Security Tests
+  # ============================================================================
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: [setup, functional-tests]
+    if: |
+      needs.setup.outputs.run_security == 'true' && 
+      (needs.functional-tests.result == 'success' || needs.functional-tests.result == 'skipped')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-html requests pyjwt
+      
+      - name: Run security tests
+        run: |
+          python -m pytest tests/security/ \
+            -v \
+            --html=reports/security-tests.html \
+            --self-contained-html \
+            --junitxml=reports/security-tests.xml
+        env:
+          GATEWAY_URL: ${{ needs.setup.outputs.gateway_url }}
+          API_KEY: ${{ secrets.TEST_API_KEY }}
+          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+      
+      - name: Run OWASP ZAP scan
+        uses: zaproxy/action-api-scan@v0.7.0
+        with:
+          target: '${{ needs.setup.outputs.gateway_url }}/api/v1/openapi.json'
+          rules_file_name: 'tests/security/zap-rules.tsv'
+          cmd_options: '-a -j'
+          fail_action: false
+      
+      - name: Upload security test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-test-results
+          path: |
+            reports/
+            zap-*.html
+            zap-*.json
+          retention-days: 30
+
+  # ============================================================================
+  # Performance Tests
+  # ============================================================================
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [setup, functional-tests]
+    if: |
+      needs.setup.outputs.run_performance == 'true' && 
+      needs.setup.outputs.environment != 'prod' &&
+      (needs.functional-tests.result == 'success' || needs.functional-tests.result == 'skipped')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+      
+      - name: Run load tests
+        run: |
+          k6 run tests/performance/load-test.js \
+            --out json=reports/k6-results.json \
+            --summary-export=reports/k6-summary.json
+        env:
+          K6_GATEWAY_URL: ${{ needs.setup.outputs.gateway_url }}
+          K6_API_KEY: ${{ secrets.TEST_API_KEY }}
+      
+      - name: Run stress tests
+        run: |
+          k6 run tests/performance/stress-test.js \
+            --out json=reports/k6-stress-results.json \
+            --summary-export=reports/k6-stress-summary.json
+        env:
+          K6_GATEWAY_URL: ${{ needs.setup.outputs.gateway_url }}
+          K6_API_KEY: ${{ secrets.TEST_API_KEY }}
+      
+      - name: Check performance thresholds
+        run: |
+          python3 scripts/check-performance-thresholds.py reports/k6-summary.json
+      
+      - name: Upload performance test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-test-results
+          path: reports/
+          retention-days: 30
+
+  # ============================================================================
+  # Test Summary and Notifications
+  # ============================================================================
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [setup, smoke-tests, functional-tests, contract-tests, security-tests, performance-tests]
+    if: always()
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-reports
+      
+      - name: Generate summary
+        run: |
+          echo "## 🧪 API Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Gateway URL:** ${{ needs.setup.outputs.gateway_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Type | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke Tests | ${{ needs.smoke-tests.result == 'success' && '✅ Passed' || needs.smoke-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Functional Tests | ${{ needs.functional-tests.result == 'success' && '✅ Passed' || needs.functional-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Contract Tests | ${{ needs.contract-tests.result == 'success' && '✅ Passed' || needs.contract-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Tests | ${{ needs.security-tests.result == 'success' && '✅ Passed' || needs.security-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance Tests | ${{ needs.performance-tests.result == 'success' && '✅ Passed' || needs.performance-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Send Slack notification
+        if: always()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🧪 API Tests Completed - ${{ needs.setup.outputs.environment }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🧪 API Test Results"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Environment:*\n${{ needs.setup.outputs.environment }}"},
+                    {"type": "mrkdwn", "text": "*Smoke:*\n${{ needs.smoke-tests.result }}"},
+                    {"type": "mrkdwn", "text": "*Functional:*\n${{ needs.functional-tests.result }}"},
+                    {"type": "mrkdwn", "text": "*Contract:*\n${{ needs.contract-tests.result }}"},
+                    {"type": "mrkdwn", "text": "*Security:*\n${{ needs.security-tests.result }}"},
+                    {"type": "mrkdwn", "text": "*Performance:*\n${{ needs.performance-tests.result }}"}
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {"type": "plain_text", "text": "View Details"},
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+

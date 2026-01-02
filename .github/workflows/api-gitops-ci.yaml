@@ -109,7 +109,7 @@ jobs:
             -output json \
             -schema-location default \
             -schema-location '/tmp/schemas/{{ .ResourceKind }}.json' \
-            -skip ApiDefinition,ApiPlan,ManagementContext \
+            -skip ApiDefinition,ApiV4Definition,ApiPlan,ManagementContext,Application,Subscription,SharedPolicyGroup \
             /tmp/manifests-${{ matrix.environment }}.yaml
       
       - name: Validate GKO CRD structure

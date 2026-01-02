@@ -15,12 +15,10 @@ resources:
   - ../../base
 
 # Add environment-specific labels
-commonLabels:
-  environment: development
-  tier: non-production
-
-# Name suffix for dev resources (optional)
-# nameSuffix: -dev
+labels:
+  - pairs:
+      environment: development
+      tier: non-production
 
 # Patches for development environment
 patches:
@@ -36,6 +34,15 @@ patches:
         path: /spec/environmentId
         value: development
 
+  # Dev-specific secret password
+  - target:
+      kind: Secret
+      name: gravitee-admin-credentials
+    patch: |-
+      - op: replace
+        path: /stringData/GRAVITEE_PASSWORD
+        value: dev-admin-password
+
   # Reduce rate limits for dev testing
   - target:
       kind: ApiDefinition
@@ -44,9 +51,6 @@ patches:
       - op: replace
         path: /spec/flows/0/pre/0/configuration/rate/limit
         value: 1000
-      - op: add
-        path: /metadata/labels/environment
-        value: development
       - op: replace
         path: /spec/analytics/logging/mode
         value: CLIENT_PROXY
@@ -73,9 +77,6 @@ patches:
       - op: replace
         path: /spec/proxy/groups/0/endpoints/0/target
         value: http://orders-service.backend-dev.svc.cluster.local:8080
-      - op: add
-        path: /metadata/labels/environment
-        value: development
 
   - target:
       kind: ApiDefinition
@@ -84,24 +85,11 @@ patches:
       - op: replace
         path: /spec/proxy/groups/0/endpoints/0/target
         value: http://products-service.backend-dev.svc.cluster.local:8080
-      - op: add
-        path: /metadata/labels/environment
-        value: development
 
 # ConfigMap for dev-specific settings
 configMapGenerator:
   - name: gravitee-api-env-config
-    behavior: create
     literals:
       - ENVIRONMENT=development
       - LOG_LEVEL=DEBUG
       - ANALYTICS_SAMPLING=100
-
-# Dev-specific secrets
-secretGenerator:
-  - name: gravitee-admin-credentials
-    behavior: replace
-    literals:
-      - GRAVITEE_USERNAME=admin
-      - GRAVITEE_PASSWORD=dev-admin-password
-

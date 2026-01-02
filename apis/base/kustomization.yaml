@@ -8,15 +8,17 @@ metadata:
   name: gravitee-apis-base
 
 # Common labels for all API resources
-commonLabels:
-  app.kubernetes.io/managed-by: gko
-  app.kubernetes.io/part-of: gravitee-apim
-  gitops.gravitee.io/source: "true"
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: gko
+      app.kubernetes.io/part-of: gravitee-apim
+      gitops.gravitee.io/source: "true"
 
 # API Definition resources
 resources:
   - namespace.yaml
   - management-context.yaml
+  - secret.yaml
   # API definitions
   - users-api/api-definition.yaml
   - users-api/api-plan.yaml
@@ -32,4 +34,3 @@ configMapGenerator:
     literals:
       - LOG_LEVEL=INFO
       - ANALYTICS_ENABLED=true
-

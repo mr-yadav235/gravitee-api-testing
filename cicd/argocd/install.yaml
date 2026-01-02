@@ -1,0 +1,109 @@
+# ArgoCD Installation Configuration
+# Apply with: kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.3/manifests/install.yaml
+# Then apply this file for custom configurations
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/name: argocd
+    app.kubernetes.io/part-of: cicd
+---
+# ArgoCD ConfigMap - Custom Settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Repository credentials template
+  repository.credentials: |
+    - url: https://github.com/
+      passwordSecret:
+        name: github-credentials
+        key: password
+      usernameSecret:
+        name: github-credentials
+        key: username
+  
+  # Resource customizations for Gravitee CRDs
+  resource.customizations: |
+    gravitee.io/ApiDefinition:
+      health.lua: |
+        hs = {}
+        if obj.status ~= nil then
+          if obj.status.state == "STARTED" then
+            hs.status = "Healthy"
+            hs.message = "API is running"
+          elseif obj.status.state == "STOPPED" then
+            hs.status = "Suspended"
+            hs.message = "API is stopped"
+          else
+            hs.status = "Progressing"
+            hs.message = "API is being processed"
+          end
+        else
+          hs.status = "Progressing"
+          hs.message = "Waiting for status"
+        end
+        return hs
+    gravitee.io/ApiV4Definition:
+      health.lua: |
+        hs = {}
+        if obj.status ~= nil then
+          if obj.status.state == "STARTED" then
+            hs.status = "Healthy"
+            hs.message = "API is running"
+          else
+            hs.status = "Progressing"
+            hs.message = "API is being processed"
+          end
+        else
+          hs.status = "Progressing"
+          hs.message = "Waiting for status"
+        end
+        return hs
+  
+  # Kustomize build options
+  kustomize.buildOptions: --enable-helm
+  
+  # Application sync timeout
+  timeout.reconciliation: 180s
+---
+# ArgoCD RBAC Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    # API Developers - can sync dev/uat, view prod
+    p, role:api-developer, applications, get, */*, allow
+    p, role:api-developer, applications, sync, */gravitee-apis-dev, allow
+    p, role:api-developer, applications, sync, */gravitee-apis-uat, allow
+    p, role:api-developer, logs, get, */*, allow
+    
+    # API Admins - full access
+    p, role:api-admin, applications, *, */*, allow
+    p, role:api-admin, clusters, *, *, allow
+    p, role:api-admin, repositories, *, *, allow
+    p, role:api-admin, projects, *, *, allow
+    
+    # Platform Team - full access
+    p, role:platform-admin, *, *, */*, allow
+    
+    # Group mappings
+    g, api-developers, role:api-developer
+    g, api-admins, role:api-admin
+    g, platform-team, role:platform-admin
+  scopes: '[groups]'
+

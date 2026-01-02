@@ -1,0 +1,106 @@
+# Gravitee Application CRD
+# Represents an API consumer/client application
+---
+apiVersion: gravitee.io/v1alpha1
+kind: Application
+metadata:
+  name: mobile-app
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: mobile-app
+    app.kubernetes.io/component: application
+    team: mobile
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  # Application details
+  name: "Mobile Application"
+  description: "Mobile app consuming Petstore APIs"
+  
+  # Application type
+  type: SIMPLE
+  
+  # Application settings
+  settings:
+    app:
+      # OAuth2 client settings (if using OAuth2)
+      clientId: "mobile-app-client"
+    oauth:
+      applicationType: NATIVE
+      grantTypes:
+        - authorization_code
+        - refresh_token
+      redirectUris:
+        - "myapp://callback"
+        - "https://mobile.example.com/callback"
+  
+  # Application metadata
+  metadata:
+    - name: team
+      value: mobile
+    - name: environment
+      value: development
+    - name: contact
+      value: mobile-team@example.com
+---
+# Web Application
+apiVersion: gravitee.io/v1alpha1
+kind: Application
+metadata:
+  name: web-portal
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: web-portal
+    app.kubernetes.io/component: application
+    team: frontend
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Web Portal"
+  description: "Web application for the customer portal"
+  type: SIMPLE
+  
+  settings:
+    app:
+      clientId: "web-portal-client"
+    oauth:
+      applicationType: WEB
+      grantTypes:
+        - authorization_code
+        - refresh_token
+      redirectUris:
+        - "https://portal.example.com/callback"
+---
+# Backend Service Application
+apiVersion: gravitee.io/v1alpha1
+kind: Application
+metadata:
+  name: order-service
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/component: application
+    team: backend
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Order Service"
+  description: "Backend microservice for order processing"
+  type: SIMPLE
+  
+  settings:
+    app:
+      clientId: "order-service-client"
+    oauth:
+      applicationType: BACKEND
+      grantTypes:
+        - client_credentials
+

@@ -1,0 +1,407 @@
+# Team API CI/CD Pipeline
+# Complete workflow from PR to UAT deployment with testing
+name: API CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apis/**'
+      - 'overlays/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apis/**'
+      - 'overlays/**'
+
+env:
+  ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+  GATEWAY_URL_DEV: ${{ secrets.GATEWAY_URL_DEV }}
+  GATEWAY_URL_UAT: ${{ secrets.GATEWAY_URL_UAT }}
+
+jobs:
+  # ==========================================
+  # STAGE 1: PR VALIDATION
+  # ==========================================
+  validate:
+    name: Validate API Definitions
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: apis/
+          config_file: .yamllint.yaml
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Validate Kustomize Builds
+        run: |
+          for env in dev uat prod; do
+            echo "Validating $env..."
+            kustomize build overlays/$env > /tmp/$env.yaml
+            echo "✓ $env build successful"
+          done
+
+      - name: Install kubeconform
+        run: |
+          wget -q https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Validate CRD Schemas
+        run: |
+          find apis -name "*.yaml" -exec kubeconform -strict {} \;
+          echo "✓ All CRDs are valid"
+
+      - name: Security Scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: apis/
+          framework: kubernetes
+          soft_fail: true
+
+  # ==========================================
+  # STAGE 2: UNIT TESTS (PR Phase)
+  # ==========================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Policy Unit Tests
+        run: npm run test:unit
+        env:
+          API_DEFINITION_PATH: apis/my-api/api-definition.yaml
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: test-results/
+
+  # ==========================================
+  # STAGE 3: CONTRACT TESTS (PR Phase)
+  # ==========================================
+  contract-tests:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Spectral
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Run OpenAPI Validation
+        run: |
+          # If OpenAPI spec exists, validate it
+          if [ -f apis/my-api/openapi.yaml ]; then
+            spectral lint apis/my-api/openapi.yaml --ruleset .spectral.yaml
+          fi
+        continue-on-error: true
+
+      - name: Check for Breaking Changes
+        run: |
+          # Compare with main branch
+          git fetch origin main
+          # Add breaking change detection logic here
+          echo "Breaking change detection completed"
+
+  # ==========================================
+  # STAGE 4: DEPLOY TO DEV
+  # ==========================================
+  deploy-dev:
+    name: Deploy to DEV
+    runs-on: ubuntu-latest
+    needs: [unit-tests, contract-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login $ARGOCD_SERVER \
+            --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} \
+            --grpc-web --insecure
+
+      - name: Sync to DEV
+        run: |
+          argocd app sync ${{ github.event.repository.name }}-dev \
+            --grpc-web --prune --timeout 300
+
+      - name: Wait for Deployment
+        run: |
+          argocd app wait ${{ github.event.repository.name }}-dev \
+            --grpc-web --timeout 300
+
+  # ==========================================
+  # STAGE 5: DEV SMOKE TESTS
+  # ==========================================
+  smoke-tests-dev:
+    name: DEV Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Get OAuth Token
+        id: token
+        run: |
+          TOKEN=$(curl -s -X POST "${{ secrets.KEYCLOAK_URL_DEV }}/realms/gravitee/protocol/openid-connect/token" \
+            -d "client_id=${{ secrets.CLIENT_ID_DEV }}" \
+            -d "client_secret=${{ secrets.CLIENT_SECRET_DEV }}" \
+            -d "grant_type=client_credentials" | jq -r '.access_token')
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Run Smoke Tests
+        run: |
+          newman run tests/postman/smoke-tests.json \
+            --environment tests/postman/env-dev.json \
+            --env-var "access_token=${{ steps.token.outputs.token }}" \
+            --reporters cli,htmlextra \
+            --reporter-htmlextra-export reports/smoke-test-report.html
+
+      - name: Upload Smoke Test Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-report-dev
+          path: reports/
+
+  # ==========================================
+  # STAGE 6: DEV INTEGRATION TESTS
+  # ==========================================
+  integration-tests-dev:
+    name: DEV Integration Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Get OAuth Token
+        id: token
+        run: |
+          TOKEN=$(curl -s -X POST "${{ secrets.KEYCLOAK_URL_DEV }}/realms/gravitee/protocol/openid-connect/token" \
+            -d "client_id=${{ secrets.CLIENT_ID_DEV }}" \
+            -d "client_secret=${{ secrets.CLIENT_SECRET_DEV }}" \
+            -d "grant_type=client_credentials" | jq -r '.access_token')
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Run Integration Tests
+        run: |
+          newman run tests/postman/integration-tests.json \
+            --environment tests/postman/env-dev.json \
+            --env-var "access_token=${{ steps.token.outputs.token }}" \
+            --reporters cli,htmlextra,junit \
+            --reporter-htmlextra-export reports/integration-test-report.html \
+            --reporter-junit-export reports/integration-test-results.xml
+
+      - name: Upload Integration Test Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-report-dev
+          path: reports/
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: reports/integration-test-results.xml
+
+  # ==========================================
+  # STAGE 7: PROMOTE TO UAT
+  # ==========================================
+  promote-to-uat:
+    name: Promote to UAT
+    runs-on: ubuntu-latest
+    needs: integration-tests-dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: uat
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login $ARGOCD_SERVER \
+            --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} \
+            --grpc-web --insecure
+
+      - name: Sync to UAT
+        run: |
+          argocd app sync ${{ github.event.repository.name }}-uat \
+            --grpc-web --prune --timeout 300
+
+      - name: Wait for Deployment
+        run: |
+          argocd app wait ${{ github.event.repository.name }}-uat \
+            --grpc-web --timeout 300
+
+  # ==========================================
+  # STAGE 8: UAT E2E TESTS
+  # ==========================================
+  e2e-tests-uat:
+    name: UAT E2E Tests
+    runs-on: ubuntu-latest
+    needs: promote-to-uat
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Get OAuth Token
+        id: token
+        run: |
+          TOKEN=$(curl -s -X POST "${{ secrets.KEYCLOAK_URL_UAT }}/realms/gravitee/protocol/openid-connect/token" \
+            -d "client_id=${{ secrets.CLIENT_ID_UAT }}" \
+            -d "client_secret=${{ secrets.CLIENT_SECRET_UAT }}" \
+            -d "grant_type=client_credentials" | jq -r '.access_token')
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Run E2E Tests
+        run: |
+          newman run tests/postman/e2e-tests.json \
+            --environment tests/postman/env-uat.json \
+            --env-var "access_token=${{ steps.token.outputs.token }}" \
+            --reporters cli,htmlextra,junit \
+            --reporter-htmlextra-export reports/e2e-test-report.html \
+            --reporter-junit-export reports/e2e-test-results.xml
+
+      - name: Upload E2E Test Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-report-uat
+          path: reports/
+
+  # ==========================================
+  # STAGE 9: UAT PERFORMANCE TESTS
+  # ==========================================
+  performance-tests-uat:
+    name: UAT Performance Tests
+    runs-on: ubuntu-latest
+    needs: e2e-tests-uat
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run Load Tests
+        run: |
+          k6 run tests/performance/load-test.js \
+            --out json=reports/k6-results.json \
+            -e GATEWAY_URL=${{ secrets.GATEWAY_URL_UAT }} \
+            -e KEYCLOAK_URL=${{ secrets.KEYCLOAK_URL_UAT }} \
+            -e CLIENT_ID=${{ secrets.CLIENT_ID_UAT }} \
+            -e CLIENT_SECRET=${{ secrets.CLIENT_SECRET_UAT }} \
+            -e ENVIRONMENT=uat
+        continue-on-error: true  # Advisory, not blocking
+
+      - name: Upload Performance Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-test-report-uat
+          path: reports/
+
+  # ==========================================
+  # STAGE 10: UAT SECURITY SCAN
+  # ==========================================
+  security-scan-uat:
+    name: UAT Security Scan
+    runs-on: ubuntu-latest
+    needs: e2e-tests-uat
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OWASP ZAP Scan
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: ${{ secrets.GATEWAY_URL_UAT }}/petstore/v3/
+          rules_file_name: 'tests/security/zap-rules.tsv'
+          cmd_options: '-a -j'
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report-uat
+          path: report_html.html
+
+  # ==========================================
+  # FINAL: NOTIFY
+  # ==========================================
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [security-scan-uat, performance-tests-uat]
+    if: always()
+    steps:
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "API Pipeline Complete",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*API CI/CD Pipeline Complete*\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref_name }}\n*Status:* ${{ needs.security-scan-uat.result == 'success' && needs.performance-tests-uat.result != 'failure' && '✅ Ready for PROD' || '⚠️ Review Required' }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+

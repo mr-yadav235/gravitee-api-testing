@@ -1,0 +1,147 @@
+# ArgoCD Project for Gravitee APIs
+# Defines permissions, sources, and destinations for API deployments
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: gravitee-apis
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: gravitee-apis-project
+    app.kubernetes.io/part-of: cicd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Gravitee API definitions managed via GitOps"
+  
+  # Allowed source repositories
+  sourceRepos:
+    - 'https://github.com/mr-yadav235/gravitee-api-testing.git'
+    - 'https://github.com/your-org/gravitee-apis-*.git'  # Team repos
+  
+  # Allowed destination clusters and namespaces
+  destinations:
+    # Development
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+      name: in-cluster
+    # UAT
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+      name: in-cluster
+    # Production
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+      name: in-cluster
+    # GKO namespace (for ManagementContext)
+    - namespace: gravitee-gko
+      server: https://kubernetes.default.svc
+      name: in-cluster
+  
+  # Cluster-scoped resources allowed
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: networking.k8s.io
+      kind: Ingress
+  
+  # Namespace-scoped resources allowed
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: ''
+      kind: Service
+    - group: ''
+      kind: ServiceAccount
+    # Gravitee CRDs
+    - group: gravitee.io
+      kind: ApiDefinition
+    - group: gravitee.io
+      kind: ApiV4Definition
+    - group: gravitee.io
+      kind: ManagementContext
+    - group: gravitee.io
+      kind: Application
+    - group: gravitee.io
+      kind: ApiResource
+    - group: gravitee.io
+      kind: Subscription
+    - group: gravitee.io
+      kind: SharedPolicyGroup
+    # External Secrets
+    - group: external-secrets.io
+      kind: ExternalSecret
+  
+  # Blocked resources
+  namespaceResourceBlacklist:
+    - group: ''
+      kind: ResourceQuota
+    - group: ''
+      kind: LimitRange
+    - group: ''
+      kind: PersistentVolumeClaim
+  
+  # RBAC Roles
+  roles:
+    - name: api-developer
+      description: "Can view and sync dev/uat API definitions"
+      policies:
+        - p, proj:gravitee-apis:api-developer, applications, get, gravitee-apis/*, allow
+        - p, proj:gravitee-apis:api-developer, applications, sync, gravitee-apis/gravitee-apis-dev, allow
+        - p, proj:gravitee-apis:api-developer, applications, sync, gravitee-apis/gravitee-apis-uat, allow
+        - p, proj:gravitee-apis:api-developer, logs, get, gravitee-apis/*, allow
+      groups:
+        - api-developers
+    
+    - name: api-admin
+      description: "Full access to API definitions including production"
+      policies:
+        - p, proj:gravitee-apis:api-admin, applications, *, gravitee-apis/*, allow
+        - p, proj:gravitee-apis:api-admin, logs, *, gravitee-apis/*, allow
+      groups:
+        - api-admins
+        - platform-team
+  
+  # Sync Windows - Control when production can be synced
+  syncWindows:
+    # Allow production sync during business hours
+    - kind: allow
+      schedule: '0 9-17 * * 1-5'  # Mon-Fri 9 AM - 5 PM
+      duration: 8h
+      applications:
+        - gravitee-apis-prod
+      manualSync: true
+      timeZone: "UTC"
+    
+    # Deny production sync outside business hours
+    - kind: deny
+      schedule: '0 17-9 * * *'  # Outside 9-5
+      duration: 16h
+      applications:
+        - gravitee-apis-prod
+      manualSync: false
+    
+    # Allow dev/uat anytime
+    - kind: allow
+      schedule: '* * * * *'
+      duration: 24h
+      applications:
+        - gravitee-apis-dev
+        - gravitee-apis-uat
+      manualSync: true
+  
+  # Orphaned resources monitoring
+  orphanedResources:
+    warn: true
+    ignore:
+      - group: ''
+        kind: ConfigMap
+        name: kube-root-ca.crt
+  
+  # Signature keys for signed commits (optional)
+  signatureKeys: []
+

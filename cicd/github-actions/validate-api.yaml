@@ -1,0 +1,150 @@
+# GitHub Actions Workflow: Validate API Definitions
+# Runs on PR to validate GKO CRDs before merge
+name: Validate API Definitions
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'release/*'
+    paths:
+      - 'cicd/gko/**'
+      - 'cicd/environments/**'
+      - 'apis/**'
+
+env:
+  KUBECONFORM_VERSION: "0.6.4"
+
+jobs:
+  validate-yaml:
+    name: Validate YAML Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate YAML
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: cicd/
+          config_file: .yamllint.yaml
+
+  validate-kustomize:
+    name: Validate Kustomize
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, uat, prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Validate Kustomize Build
+        run: |
+          echo "Validating ${{ matrix.environment }} environment..."
+          kustomize build cicd/environments/${{ matrix.environment }} > /tmp/output.yaml
+          echo "✓ Kustomize build successful for ${{ matrix.environment }}"
+
+  validate-crds:
+    name: Validate GKO CRDs
+    runs-on: ubuntu-latest
+    needs: validate-kustomize
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          wget -q https://github.com/yannh/kubeconform/releases/download/v${{ env.KUBECONFORM_VERSION }}/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Download GKO CRD Schemas
+        run: |
+          mkdir -p /tmp/schemas
+          # Download Gravitee CRD schemas
+          curl -sL https://raw.githubusercontent.com/gravitee-io/gravitee-kubernetes-operator/master/helm/gko/crds/apim.gravitee.io_apidefinitions.yaml \
+            -o /tmp/schemas/apidefinition.yaml
+          curl -sL https://raw.githubusercontent.com/gravitee-io/gravitee-kubernetes-operator/master/helm/gko/crds/apim.gravitee.io_apiv4definitions.yaml \
+            -o /tmp/schemas/apiv4definition.yaml
+
+      - name: Validate CRDs
+        run: |
+          echo "Validating GKO CRDs..."
+          find cicd/gko/crds -name "*.yaml" -exec kubeconform -strict -summary {} \;
+          echo "✓ All CRDs are valid"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: cicd/
+          framework: kubernetes
+          soft_fail: true
+          output_format: sarif
+          output_file_path: results.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results.sarif
+
+  check-sensitive-data:
+    name: Check for Sensitive Data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check for secrets
+        run: |
+          python scripts/check-sensitive-data.py cicd/
+
+  dry-run:
+    name: Dry Run Deployment
+    runs-on: ubuntu-latest
+    needs: [validate-crds, security-scan]
+    if: github.event.pull_request.base.ref == 'main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Generate manifests
+        run: |
+          for env in dev uat prod; do
+            echo "=== $env environment ==="
+            kustomize build cicd/environments/$env
+            echo ""
+          done
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ API Definition validation passed!\n\nAll CRDs are valid and ready for deployment.'
+            });
+

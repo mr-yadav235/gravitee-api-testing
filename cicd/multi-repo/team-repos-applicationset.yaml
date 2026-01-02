@@ -1,0 +1,175 @@
+# Multi-Repo ApplicationSet using SCM Provider Generator
+# Automatically discovers team repositories and creates ArgoCD Applications
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: team-apis
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: team-apis
+    app.kubernetes.io/component: multi-repo
+spec:
+  # SCM Provider Generator - discovers repos matching pattern
+  generators:
+    - matrix:
+        generators:
+          # First generator: Discover team repositories from GitHub
+          - scmProvider:
+              github:
+                organization: mr-yadav235  # Your GitHub org
+                # Filter repositories by topic or name pattern
+                allBranches: false
+                tokenRef:
+                  secretName: github-token
+                  key: token
+              filters:
+                # Only include repos with 'gravitee-api' topic
+                - repositoryMatch: "^gravitee-api-.*"
+                # Or filter by topics
+                # - topicsContain:
+                #     - gravitee-api
+              cloneProtocol: https
+          
+          # Second generator: Environments
+          - list:
+              elements:
+                - env: dev
+                  branch: develop
+                  autoSync: true
+                  namespace: gravitee-apis-dev
+                - env: uat
+                  branch: release/*
+                  autoSync: true
+                  namespace: gravitee-apis-uat
+                - env: prod
+                  branch: main
+                  autoSync: false
+                  namespace: gravitee-apis-prod
+
+  template:
+    metadata:
+      name: '{{repository}}-{{env}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: '{{repository}}'
+        app.kubernetes.io/instance: '{{env}}'
+        team: '{{repository | replace "gravitee-api-" ""}}'
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: 'team-{{repository | replace "gravitee-api-" ""}}'
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: gravitee-alerts
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    
+    spec:
+      project: '{{repository | replace "gravitee-api-" ""}}-team'
+      
+      source:
+        repoURL: '{{url}}'
+        targetRevision: '{{branch}}'
+        path: 'overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{autoSync}}'
+          selfHeal: '{{autoSync}}'
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 1m
+      
+      ignoreDifferences:
+        - group: gravitee.io
+          kind: ApiV4Definition
+          jsonPointers:
+            - /status
+---
+# Alternative: List-based generator for known team repos
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: team-apis-explicit
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: team-apis-explicit
+spec:
+  generators:
+    - matrix:
+        generators:
+          # Team repositories
+          - list:
+              elements:
+                - team: payments
+                  repo: https://github.com/mr-yadav235/gravitee-api-payments.git
+                  owners: "@payments-team"
+                - team: catalog
+                  repo: https://github.com/mr-yadav235/gravitee-api-catalog.git
+                  owners: "@catalog-team"
+                - team: orders
+                  repo: https://github.com/mr-yadav235/gravitee-api-orders.git
+                  owners: "@orders-team"
+                - team: users
+                  repo: https://github.com/mr-yadav235/gravitee-api-users.git
+                  owners: "@users-team"
+          
+          # Environments
+          - list:
+              elements:
+                - env: dev
+                  branch: develop
+                  autoSync: "true"
+                  selfHeal: "true"
+                  prune: "true"
+                - env: uat
+                  branch: main
+                  autoSync: "true"
+                  selfHeal: "true"
+                  prune: "true"
+                - env: prod
+                  branch: main
+                  autoSync: "false"
+                  selfHeal: "false"
+                  prune: "false"
+
+  template:
+    metadata:
+      name: '{{team}}-apis-{{env}}'
+      namespace: argocd
+      labels:
+        team: '{{team}}'
+        environment: '{{env}}'
+      annotations:
+        argocd.argoproj.io/manifest-generate-paths: overlays/{{env}}
+        team-owners: '{{owners}}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    
+    spec:
+      project: '{{team}}-team'
+      
+      source:
+        repoURL: '{{repo}}'
+        targetRevision: '{{branch}}'
+        path: 'overlays/{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'gravitee-apis-{{env}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{selfHeal}}'
+        syncOptions:
+          - CreateNamespace=true
+

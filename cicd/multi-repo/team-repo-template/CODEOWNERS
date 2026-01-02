@@ -1,0 +1,18 @@
+# CODEOWNERS - Team API Repository
+# These owners will be requested for review when changes are made
+
+# Default owners for everything
+* @my-team-leads
+
+# API definitions require team lead approval
+/apis/ @my-team-leads @api-reviewers
+
+# Production changes require additional approval
+/overlays/prod/ @my-team-leads @platform-team @security-team
+
+# GitHub workflows require platform team approval
+/.github/ @platform-team
+
+# Test changes
+/apis/*/tests/ @my-team-developers @my-team-leads
+

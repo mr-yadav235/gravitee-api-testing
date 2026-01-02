@@ -1,0 +1,149 @@
+# OWASP ZAP Configuration for API Security Testing
+# Used in UAT phase for security validation
+---
+env:
+  contexts:
+    - name: "Gravitee API Context"
+      urls:
+        - "http://localhost:8082/petstore/v3/*"
+        - "http://localhost:8082/petstore-secure/v3/*"
+      includePaths:
+        - "http://localhost:8082/petstore.*"
+      excludePaths:
+        - ".*\\.js$"
+        - ".*\\.css$"
+        - ".*\\.png$"
+      authentication:
+        method: "script"
+        parameters:
+          script: "jwt-auth.js"
+          scriptEngine: "ECMAScript"
+        verification:
+          method: "response"
+          pollUrl: ""
+          pollData: ""
+          pollHeaders: ""
+          pollFrequency: 60
+          loggedInIndicator: "\\Qid\\E"
+          loggedOutIndicator: "\\QUnauthorized\\E"
+      sessionManagement:
+        method: "httpAuthSessionManagement"
+      technology:
+        exclude: []
+      users:
+        - name: "api-user"
+          credentials:
+            username: "apiuser"
+            password: "apiuser123"
+
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # Passive scan - analyze responses
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 10
+      scanOnlyInScope: true
+      maxBodySizeInBytesToScan: 10000
+
+  # Spider - discover endpoints
+  - type: spider
+    parameters:
+      context: "Gravitee API Context"
+      user: "api-user"
+      url: "http://localhost:8082/petstore/v3/"
+      maxDuration: 5
+      maxDepth: 5
+      maxChildren: 10
+
+  # OpenAPI import
+  - type: openapi
+    parameters:
+      apiUrl: "https://petstore3.swagger.io/api/v3/openapi.json"
+      targetUrl: "http://localhost:8082/petstore/v3"
+      context: "Gravitee API Context"
+
+  # Active scan - attack endpoints
+  - type: activeScan
+    parameters:
+      context: "Gravitee API Context"
+      user: "api-user"
+      policy: "API-Scan-Policy"
+      maxRuleDurationInMins: 5
+      maxScanDurationInMins: 30
+
+  # Generate reports
+  - type: report
+    parameters:
+      template: "traditional-html"
+      reportDir: "/zap/reports"
+      reportFile: "zap-report"
+      reportTitle: "Gravitee API Security Scan"
+      reportDescription: "Security scan results for APIs deployed via GitOps"
+    risks:
+      - high
+      - medium
+      - low
+      - info
+
+  - type: report
+    parameters:
+      template: "sarif-json"
+      reportDir: "/zap/reports"
+      reportFile: "zap-report.sarif"
+
+# Alert filters - customize what's reported
+alertFilters:
+  # Ignore certain alerts
+  - ruleId: 10021  # X-Content-Type-Options (handled by Gravitee)
+    newRisk: "Info"
+    context: "Gravitee API Context"
+    
+  - ruleId: 10038  # Content Security Policy
+    newRisk: "Info"
+    context: "Gravitee API Context"
+
+# Scan policy for APIs
+scanPolicies:
+  - name: "API-Scan-Policy"
+    defaultStrength: "medium"
+    defaultThreshold: "medium"
+    rules:
+      # SQL Injection
+      - id: 40018
+        strength: "high"
+        threshold: "low"
+      
+      # XSS
+      - id: 40012
+        strength: "high"
+        threshold: "low"
+      
+      # Path Traversal
+      - id: 6
+        strength: "high"
+        threshold: "low"
+      
+      # Remote File Inclusion
+      - id: 7
+        strength: "medium"
+        threshold: "medium"
+      
+      # Server Side Include
+      - id: 40009
+        strength: "medium"
+        threshold: "medium"
+      
+      # External Redirect
+      - id: 20019
+        strength: "medium"
+        threshold: "medium"
+      
+      # CRLF Injection
+      - id: 40003
+        strength: "medium"
+        threshold: "medium"
+

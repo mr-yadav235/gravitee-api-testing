@@ -1,0 +1,95 @@
+# Petstore API Definition for Gravitee Kubernetes Operator
+# This CRD will be synced by ArgoCD to create the API in Gravitee
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiV4Definition
+metadata:
+  name: petstore-api
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: petstore-api
+    app.kubernetes.io/component: api
+    team: platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # Reference to Management Context
+  contextRef:
+    name: local-gravitee
+    namespace: gravitee-gko
+  
+  # API Definition
+  name: "Petstore API"
+  description: "Swagger Petstore API - Managed via GitOps"
+  version: "1.0.0"
+  
+  # API Type
+  type: PROXY
+  
+  # Listeners (entrypoints)
+  listeners:
+    - type: HTTP
+      paths:
+        - path: /petstore/v3
+      entrypoints:
+        - type: http-proxy
+  
+  # Endpoints (backend)
+  endpointGroups:
+    - name: default
+      type: http-proxy
+      endpoints:
+        - name: petstore-backend
+          type: http-proxy
+          target: https://petstore3.swagger.io/api/v3
+          weight: 1
+          configuration:
+            connectTimeout: 5000
+            readTimeout: 10000
+  
+  # Flows (policies)
+  flows:
+    - name: "Default Flow"
+      enabled: true
+      selectors:
+        - type: HTTP
+          path: /
+          pathOperator: STARTS_WITH
+      request:
+        - name: "Add Request Header"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            addHeaders:
+              - name: X-Gravitee-Transaction-Id
+                value: "{#request.id}"
+              - name: X-Source
+                value: "gravitee-gitops"
+      response:
+        - name: "Add Response Header"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            addHeaders:
+              - name: X-Powered-By
+                value: "Gravitee-GKO"
+  
+  # Plans (security)
+  plans:
+    keyless:
+      name: "Keyless Plan"
+      description: "Open access - no authentication required"
+      security:
+        type: KEY_LESS
+      status: PUBLISHED
+      flows:
+        - enabled: true
+          selectors:
+            - type: HTTP
+              path: /
+              pathOperator: STARTS_WITH
+  
+  # Lifecycle
+  state: STARTED
+  lifecycleState: PUBLISHED
+

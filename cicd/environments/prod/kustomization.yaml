@@ -1,0 +1,77 @@
+# Production Environment Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: gravitee-apis-prod
+
+namespace: gravitee-apis-prod
+
+commonLabels:
+  environment: prod
+  app.kubernetes.io/managed-by: argocd
+  app.kubernetes.io/part-of: gravitee-apis
+
+commonAnnotations:
+  # Production requires manual sync
+  argocd.argoproj.io/sync-options: "Prune=false"
+
+resources:
+  - namespace.yaml
+  - network-policy.yaml
+  - ../../gko/crds/api-jwt-secured.yaml  # Only secured APIs in prod
+
+# Patches for Production environment
+patches:
+  # Update context path for prod
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api-secured
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /api/petstore/v3
+      - op: replace
+        path: /spec/name
+        value: "Petstore API"
+      - op: replace
+        path: /spec/visibility
+        value: PRIVATE
+  
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api-apikey
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /api/petstore-apikey/v3
+      - op: replace
+        path: /spec/visibility
+        value: PRIVATE
+  
+  # Strict rate limits for production
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/flows/0/request/1/configuration/rate/limit
+        value: 100
+  
+  # Disable payload logging in production
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/analytics/logging/content/payload
+        value: false
+      - op: replace
+        path: /spec/analytics/logging/content/headers
+        value: false
+
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=prod
+      - LOG_LEVEL=WARN
+      - RATE_LIMIT=100
+

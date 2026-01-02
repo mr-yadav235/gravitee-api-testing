@@ -1,0 +1,9 @@
+# Gravitee Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gravitee
+  labels:
+    app.kubernetes.io/name: gravitee
+    app.kubernetes.io/part-of: gravitee-apim
+

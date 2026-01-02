@@ -1,0 +1,44 @@
+# Development Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gravitee-apis-dev
+
+commonLabels:
+  environment: dev
+
+resources:
+  - ../../apis/my-api/api-definition.yaml
+
+# Dev-specific patches
+patches:
+  # Enable debug logging
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/analytics/logging/content/payload
+        value: true
+  
+  # Higher rate limits for dev
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: add
+        path: /spec/flows/0/request/-
+        value:
+          name: "Rate Limit (Dev)"
+          enabled: true
+          policy: rate-limit
+          configuration:
+            rate:
+              limit: 1000
+              periodTime: 1
+              periodTimeUnit: MINUTES
+
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=dev
+      - LOG_LEVEL=DEBUG
+

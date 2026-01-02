@@ -1,0 +1,63 @@
+# Production Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gravitee-apis-prod
+
+commonLabels:
+  environment: prod
+
+resources:
+  - ../../apis/my-api/api-definition.yaml
+
+# Production-specific patches
+patches:
+  # Production context path
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /api/my-api/v1
+  
+  # Strict rate limits
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: add
+        path: /spec/flows/0/request/-
+        value:
+          name: "Rate Limit (Prod)"
+          enabled: true
+          policy: rate-limit
+          configuration:
+            rate:
+              limit: 100
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  # Disable all payload logging
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/analytics/logging/content/payload
+        value: false
+      - op: replace
+        path: /spec/analytics/logging/content/headers
+        value: false
+  
+  # Private visibility
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/visibility
+        value: PRIVATE
+
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=prod
+      - LOG_LEVEL=WARN
+

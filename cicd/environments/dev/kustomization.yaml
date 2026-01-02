@@ -1,0 +1,55 @@
+# Development Environment Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: gravitee-apis-dev
+
+# Namespace for all resources
+namespace: gravitee-apis-dev
+
+# Common labels
+commonLabels:
+  environment: dev
+  app.kubernetes.io/managed-by: argocd
+  app.kubernetes.io/part-of: gravitee-apis
+
+# Common annotations
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"
+
+# Resources to deploy
+resources:
+  - namespace.yaml
+  - ../../gko/crds/api-definition-v4.yaml
+  - ../../gko/crds/api-jwt-secured.yaml
+  - ../../gko/crds/application.yaml
+  # - ../../gko/crds/subscription.yaml  # Enable after APIs and Apps are created
+
+# Patches for dev environment
+patches:
+  # Reduce rate limits for dev
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api
+    patch: |-
+      - op: replace
+        path: /spec/flows/0/request/1/configuration/rate/limit
+        value: 1000
+  
+  # Enable debug logging
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: add
+        path: /spec/analytics/logging/content/payload
+        value: true
+
+# Config map for environment variables
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=dev
+      - LOG_LEVEL=DEBUG
+      - RATE_LIMIT=1000
+

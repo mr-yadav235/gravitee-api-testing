@@ -1,0 +1,155 @@
+# ArgoCD ApplicationSet for Multi-Environment Deployment
+# Automatically creates Applications for dev, uat, and prod
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gravitee-apis
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: gravitee-apis
+    app.kubernetes.io/component: applicationset
+    app.kubernetes.io/part-of: cicd
+spec:
+  # Generate applications for each environment
+  generators:
+    - list:
+        elements:
+          # Development Environment
+          - env: dev
+            namespace: gravitee-apis-dev
+            cluster: https://kubernetes.default.svc
+            branch: develop
+            autoSync: true
+            selfHeal: true
+            prune: true
+            values: |
+              environment: dev
+              replicas: 1
+              logLevel: DEBUG
+          
+          # UAT Environment
+          - env: uat
+            namespace: gravitee-apis-uat
+            cluster: https://kubernetes.default.svc
+            branch: release/*
+            autoSync: true
+            selfHeal: true
+            prune: true
+            values: |
+              environment: uat
+              replicas: 2
+              logLevel: INFO
+          
+          # Production Environment
+          - env: prod
+            namespace: gravitee-apis-prod
+            cluster: https://kubernetes.default.svc
+            branch: main
+            autoSync: false  # Manual sync for production
+            selfHeal: false
+            prune: false
+            values: |
+              environment: prod
+              replicas: 3
+              logLevel: WARN
+  
+  template:
+    metadata:
+      name: 'gravitee-apis-{{env}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: gravitee-apis
+        app.kubernetes.io/instance: '{{env}}'
+        environment: '{{env}}'
+      annotations:
+        # Notifications
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: gravitee-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: gravitee-alerts
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: gravitee-alerts
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    
+    spec:
+      project: gravitee-apis
+      
+      source:
+        repoURL: 'https://github.com/mr-yadav235/gravitee-api-testing.git'
+        targetRevision: '{{branch}}'
+        path: 'cicd/environments/{{env}}'
+        
+        # Kustomize configuration
+        kustomize:
+          commonLabels:
+            argocd.argoproj.io/instance: 'gravitee-apis-{{env}}'
+            environment: '{{env}}'
+      
+      destination:
+        server: '{{cluster}}'
+        namespace: '{{namespace}}'
+      
+      # Sync policy - conditional based on environment
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{selfHeal}}'
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      
+      # Ignore status fields that change frequently
+      ignoreDifferences:
+        - group: gravitee.io
+          kind: ApiDefinition
+          jsonPointers:
+            - /status
+        - group: gravitee.io
+          kind: ApiV4Definition
+          jsonPointers:
+            - /status
+        - group: gravitee.io
+          kind: Application
+          jsonPointers:
+            - /status
+      
+      # Revision history
+      revisionHistoryLimit: 10
+---
+# Individual Application for Management Context (shared across envs)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gravitee-management-context
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: gravitee-management-context
+    app.kubernetes.io/part-of: cicd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: gravitee-apis
+  source:
+    repoURL: 'https://github.com/mr-yadav235/gravitee-api-testing.git'
+    targetRevision: main
+    path: 'cicd/gko'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gravitee-gko
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+

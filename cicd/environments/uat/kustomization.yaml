@@ -1,0 +1,68 @@
+# UAT Environment Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: gravitee-apis-uat
+
+namespace: gravitee-apis-uat
+
+commonLabels:
+  environment: uat
+  app.kubernetes.io/managed-by: argocd
+  app.kubernetes.io/part-of: gravitee-apis
+
+resources:
+  - namespace.yaml
+  - ../../gko/crds/api-definition-v4.yaml
+  - ../../gko/crds/api-jwt-secured.yaml
+
+# Patches for UAT environment
+patches:
+  # Update context path for UAT
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /uat/petstore/v3
+      - op: replace
+        path: /spec/name
+        value: "Petstore API (UAT)"
+  
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api-secured
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /uat/petstore-secure/v3
+      - op: replace
+        path: /spec/name
+        value: "Petstore API Secured (UAT)"
+  
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api-apikey
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /uat/petstore-apikey/v3
+
+# Stricter rate limits for UAT
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api
+    patch: |-
+      - op: replace
+        path: /spec/flows/0/request/1/configuration/rate/limit
+        value: 500
+
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=uat
+      - LOG_LEVEL=INFO
+      - RATE_LIMIT=500
+

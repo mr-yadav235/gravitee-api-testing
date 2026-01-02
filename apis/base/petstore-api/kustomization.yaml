@@ -1,0 +1,15 @@
+# Kustomization for Petstore API
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: petstore-api
+
+resources:
+  - api-definition.yaml
+  # - api-jwt-plan.yaml  # Uncomment for JWT-secured version
+
+commonLabels:
+  app.kubernetes.io/managed-by: argocd
+  app.kubernetes.io/part-of: gravitee-apis
+

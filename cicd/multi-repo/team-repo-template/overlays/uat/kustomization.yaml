@@ -1,0 +1,52 @@
+# UAT Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gravitee-apis-uat
+
+commonLabels:
+  environment: uat
+
+resources:
+  - ../../apis/my-api/api-definition.yaml
+
+# UAT-specific patches
+patches:
+  # Update context path for UAT
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /uat/my-api/v1
+  
+  # Stricter rate limits
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: add
+        path: /spec/flows/0/request/-
+        value:
+          name: "Rate Limit (UAT)"
+          enabled: true
+          policy: rate-limit
+          configuration:
+            rate:
+              limit: 500
+              periodTime: 1
+              periodTimeUnit: MINUTES
+  
+  # Disable payload logging
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/analytics/logging/content/payload
+        value: false
+
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=uat
+      - LOG_LEVEL=INFO
+

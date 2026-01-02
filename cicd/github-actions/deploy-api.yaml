@@ -1,0 +1,160 @@
+# GitHub Actions Workflow: Deploy APIs via ArgoCD
+# Triggers ArgoCD sync after merge
+name: Deploy APIs
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'cicd/gko/**'
+      - 'cicd/environments/**'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+      sync_mode:
+        description: 'Sync mode'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - manual
+
+env:
+  ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+  ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+
+jobs:
+  determine-environment:
+    name: Determine Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+    steps:
+      - name: Set environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    name: Deploy to ${{ needs.determine-environment.outputs.environment }}
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    environment: ${{ needs.determine-environment.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login $ARGOCD_SERVER \
+            --auth-token $ARGOCD_AUTH_TOKEN \
+            --grpc-web \
+            --insecure
+
+      - name: Sync Application
+        run: |
+          APP_NAME="gravitee-apis-${{ needs.determine-environment.outputs.environment }}"
+          echo "Syncing $APP_NAME..."
+          
+          # Trigger sync
+          argocd app sync $APP_NAME \
+            --grpc-web \
+            --prune \
+            --timeout 300
+          
+          # Wait for sync to complete
+          argocd app wait $APP_NAME \
+            --grpc-web \
+            --timeout 300
+
+      - name: Get Application Status
+        run: |
+          APP_NAME="gravitee-apis-${{ needs.determine-environment.outputs.environment }}"
+          argocd app get $APP_NAME --grpc-web
+
+      - name: Notify on Success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "✅ API Deployment Successful",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*API Deployment Successful* ✅\n*Environment:* ${{ needs.determine-environment.outputs.environment }}\n*Commit:* ${{ github.sha }}\n*Actor:* ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify on Failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "❌ API Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*API Deployment Failed* ❌\n*Environment:* ${{ needs.determine-environment.outputs.environment }}\n*Commit:* ${{ github.sha }}\n*Actor:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: [determine-environment, deploy]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Smoke Tests
+        run: |
+          ENV="${{ needs.determine-environment.outputs.environment }}"
+          GATEWAY_URL="${{ secrets[format('GATEWAY_URL_{0}', env.ENV)] }}"
+          
+          echo "Running smoke tests against $GATEWAY_URL..."
+          
+          # Test API health
+          curl -sf "$GATEWAY_URL/petstore/v3/pet/1" || exit 1
+          
+          echo "✓ Smoke tests passed"
+

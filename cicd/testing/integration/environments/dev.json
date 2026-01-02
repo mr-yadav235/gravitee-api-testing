@@ -1,0 +1,52 @@
+{
+  "id": "dev-environment",
+  "name": "DEV Environment",
+  "values": [
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8082",
+      "enabled": true
+    },
+    {
+      "key": "api_path",
+      "value": "petstore/v3",
+      "enabled": true
+    },
+    {
+      "key": "secure_api_path",
+      "value": "petstore-secure/v3",
+      "enabled": true
+    },
+    {
+      "key": "keycloak_url",
+      "value": "http://localhost:8180",
+      "enabled": true
+    },
+    {
+      "key": "realm",
+      "value": "gravitee",
+      "enabled": true
+    },
+    {
+      "key": "client_id",
+      "value": "api-client",
+      "enabled": true
+    },
+    {
+      "key": "client_secret",
+      "value": "api-client-secret",
+      "enabled": true
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "environment",
+      "value": "dev",
+      "enabled": true
+    }
+  ]
+}
+

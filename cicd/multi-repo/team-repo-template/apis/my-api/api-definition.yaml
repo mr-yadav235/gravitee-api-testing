@@ -1,0 +1,133 @@
+# Team API Definition Template
+# Replace 'my-api' with your actual API name
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiV4Definition
+metadata:
+  name: my-api  # CHANGE: Your API name
+  labels:
+    app.kubernetes.io/name: my-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "1.0.0"
+    team: my-team  # CHANGE: Your team name
+    domain: my-domain  # CHANGE: Your domain
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  # API Metadata
+  name: "My API"  # CHANGE: Display name
+  description: |
+    Description of your API.
+    Include purpose, consumers, and any important notes.
+  version: "1.0.0"
+  
+  type: PROXY
+  state: STARTED
+  lifecycleState: PUBLISHED
+  visibility: PRIVATE
+  
+  labels:
+    - my-team
+    - my-domain
+  
+  # Entrypoint
+  listeners:
+    - type: HTTP
+      paths:
+        - path: /my-api/v1  # CHANGE: Your context path
+      entrypoints:
+        - type: http-proxy
+  
+  # Backend
+  endpointGroups:
+    - name: default
+      type: http-proxy
+      endpoints:
+        - name: backend
+          type: http-proxy
+          target: https://api.example.com  # CHANGE: Your backend URL
+          weight: 1
+          configuration:
+            connectTimeout: 5000
+            readTimeout: 10000
+  
+  # Request/Response processing
+  flows:
+    - name: "Default Flow"
+      enabled: true
+      selectors:
+        - type: HTTP
+          path: /
+          pathOperator: STARTS_WITH
+      request:
+        - name: "Add Headers"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            addHeaders:
+              - name: X-Request-Id
+                value: "{#request.id}"
+      response:
+        - name: "Add Response Headers"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            addHeaders:
+              - name: X-Powered-By
+                value: "Gravitee"
+  
+  # Security Plans
+  plans:
+    # JWT Plan (recommended for production)
+    jwt:
+      name: "JWT Authentication"
+      description: "Requires valid JWT token"
+      security:
+        type: JWT
+        configuration:
+          signature: RSA_RS256
+          publicKeyResolver: JWKS_URL
+          resolverParameter: "http://keycloak.gravitee.svc.cluster.local:8080/realms/gravitee/protocol/openid-connect/certs"
+          extractClaims: true
+      status: PUBLISHED
+      validation: AUTO
+      order: 1
+      flows:
+        - enabled: true
+          selectors:
+            - type: HTTP
+              path: /
+              pathOperator: STARTS_WITH
+    
+    # API Key Plan (alternative)
+    api-key:
+      name: "API Key"
+      description: "Requires valid API key"
+      security:
+        type: API_KEY
+      status: PUBLISHED
+      validation: AUTO
+      order: 2
+      flows:
+        - enabled: true
+          selectors:
+            - type: HTTP
+              path: /
+              pathOperator: STARTS_WITH
+  
+  # Analytics
+  analytics:
+    enabled: true
+    logging:
+      mode:
+        entrypoint: true
+        endpoint: true
+      phase:
+        request: true
+        response: true
+      content:
+        headers: true
+        payload: false
+

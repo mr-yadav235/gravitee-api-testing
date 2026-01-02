@@ -1,0 +1,13 @@
+# Development Namespace
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gravitee-apis-dev
+  labels:
+    environment: dev
+    app.kubernetes.io/name: gravitee-apis
+    app.kubernetes.io/part-of: gravitee-apim
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+

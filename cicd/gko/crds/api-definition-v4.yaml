@@ -1,0 +1,183 @@
+# API V4 Definition Template
+# This is the recommended format for new APIs in Gravitee 4.x
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiV4Definition
+metadata:
+  name: petstore-api
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: petstore-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "1.0.0"
+    team: platform
+    domain: pets
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    gravitee.io/description: "Swagger Petstore API managed via GitOps"
+spec:
+  # Reference to Management Context
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  # API Metadata
+  name: "Petstore API"
+  description: |
+    The Swagger Petstore API provides endpoints for managing pets in a store.
+    This API is managed via GitOps using ArgoCD and GKO.
+  version: "1.0.0"
+  
+  # API Type: PROXY or MESSAGE
+  type: PROXY
+  
+  # API State
+  state: STARTED
+  lifecycleState: PUBLISHED
+  
+  # Visibility
+  visibility: PUBLIC
+  
+  # Labels and Categories
+  labels:
+    - petstore
+    - swagger
+    - demo
+  categories:
+    - Pets
+    - Demo
+  
+  # Listeners (Entrypoints)
+  listeners:
+    - type: HTTP
+      paths:
+        - path: /petstore/v3
+      entrypoints:
+        - type: http-proxy
+          configuration:
+            # Request timeout in ms
+            requestTimeout: 30000
+  
+  # Endpoint Groups (Backend targets)
+  endpointGroups:
+    - name: default-group
+      type: http-proxy
+      loadBalancer:
+        type: ROUND_ROBIN
+      endpoints:
+        - name: petstore-backend
+          type: http-proxy
+          target: https://petstore3.swagger.io/api/v3
+          weight: 1
+          secondary: false
+          tenants: []
+          configuration:
+            # Connection settings
+            connectTimeout: 5000
+            readTimeout: 10000
+            idleTimeout: 60000
+            maxConcurrentConnections: 100
+            # SSL/TLS
+            ssl:
+              trustAll: false
+              hostnameVerifier: true
+  
+  # Flows (Request/Response processing)
+  flows:
+    - name: "Default Flow"
+      enabled: true
+      selectors:
+        - type: HTTP
+          path: /
+          pathOperator: STARTS_WITH
+          methods: []
+      
+      # Request phase policies
+      request:
+        - name: "Add Transaction ID"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            scope: REQUEST
+            addHeaders:
+              - name: X-Gravitee-Transaction-Id
+                value: "{#request.id}"
+              - name: X-Request-Start
+                value: "{#timestamp}"
+        
+        - name: "Rate Limiting"
+          enabled: true
+          policy: rate-limit
+          configuration:
+            rate:
+              periodTime: 1
+              periodTimeUnit: MINUTES
+              limit: 100
+            key: "{#request.headers['X-Forwarded-For'] ?: #request.remoteAddress}"
+      
+      # Response phase policies
+      response:
+        - name: "Add Response Headers"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            scope: RESPONSE
+            addHeaders:
+              - name: X-Powered-By
+                value: "Gravitee-GKO"
+              - name: X-Response-Time
+                value: "{#response.headers['X-Gravitee-Transaction-Id']}"
+  
+  # Plans (Security)
+  plans:
+    # Keyless plan for public access
+    keyless:
+      name: "Open Access"
+      description: "No authentication required - for public endpoints"
+      security:
+        type: KEY_LESS
+      status: PUBLISHED
+      validation: AUTO
+      order: 1
+      flows:
+        - enabled: true
+          selectors:
+            - type: HTTP
+              path: /
+              pathOperator: STARTS_WITH
+  
+  # Analytics
+  analytics:
+    enabled: true
+    logging:
+      mode:
+        entrypoint: true
+        endpoint: true
+      phase:
+        request: true
+        response: true
+      content:
+        headers: true
+        payload: false  # Disable payload logging for performance
+      condition: "{#response.status >= 400}"  # Only log errors
+  
+  # CORS Configuration
+  cors:
+    enabled: true
+    allowCredentials: false
+    allowOrigins:
+      - "*"
+    allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowHeaders:
+      - Authorization
+      - Content-Type
+      - X-Requested-With
+    exposeHeaders:
+      - X-Gravitee-Transaction-Id
+    maxAge: 1800
+

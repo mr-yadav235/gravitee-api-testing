@@ -1,0 +1,180 @@
+# JWT-Secured API Definition
+# Uses Keycloak for JWT validation
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiV4Definition
+metadata:
+  name: petstore-api-secured
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: petstore-api-secured
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "1.0.0"
+    security: jwt
+    team: platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Petstore API (Secured)"
+  description: "JWT-secured Petstore API using Keycloak authentication"
+  version: "1.0.0"
+  type: PROXY
+  state: STARTED
+  lifecycleState: PUBLISHED
+  visibility: PRIVATE
+  
+  labels:
+    - petstore
+    - secured
+    - jwt
+    - keycloak
+  
+  # Listeners
+  listeners:
+    - type: HTTP
+      paths:
+        - path: /petstore-secure/v3
+      entrypoints:
+        - type: http-proxy
+  
+  # Endpoints
+  endpointGroups:
+    - name: default-group
+      type: http-proxy
+      endpoints:
+        - name: petstore-backend
+          type: http-proxy
+          target: https://petstore3.swagger.io/api/v3
+          weight: 1
+  
+  # Flows with user context
+  flows:
+    - name: "Authenticated Flow"
+      enabled: true
+      selectors:
+        - type: HTTP
+          path: /
+          pathOperator: STARTS_WITH
+      request:
+        - name: "Add User Context Headers"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            scope: REQUEST
+            addHeaders:
+              - name: X-User-Id
+                value: "{#context.attributes['jwt.claims']['sub']}"
+              - name: X-User-Email
+                value: "{#context.attributes['jwt.claims']['email']}"
+              - name: X-User-Name
+                value: "{#context.attributes['jwt.claims']['preferred_username']}"
+              - name: X-Client-Id
+                value: "{#context.attributes['jwt.claims']['azp']}"
+  
+  # JWT Plan
+  plans:
+    jwt-keycloak:
+      name: "JWT-Keycloak"
+      description: "JWT validation using Keycloak JWKS endpoint"
+      security:
+        type: JWT
+        configuration:
+          # Signature validation
+          signature: RSA_RS256
+          
+          # JWKS URL for public key retrieval
+          publicKeyResolver: JWKS_URL
+          resolverParameter: "http://keycloak.gravitee.svc.cluster.local:8080/realms/gravitee/protocol/openid-connect/certs"
+          
+          # Token extraction
+          extractClaims: true
+          propagateAuthHeader: true
+          
+          # Optional: Validate specific claims
+          # userClaim: sub
+          # clientIdClaim: azp
+      
+      status: PUBLISHED
+      validation: AUTO
+      order: 1
+      
+      flows:
+        - enabled: true
+          selectors:
+            - type: HTTP
+              path: /
+              pathOperator: STARTS_WITH
+  
+  # Analytics
+  analytics:
+    enabled: true
+    logging:
+      mode:
+        entrypoint: true
+        endpoint: true
+      phase:
+        request: true
+        response: true
+      content:
+        headers: true
+        payload: false
+---
+# API Key Secured Version
+apiVersion: gravitee.io/v1alpha1
+kind: ApiV4Definition
+metadata:
+  name: petstore-api-apikey
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: petstore-api-apikey
+    security: api-key
+    team: platform
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Petstore API (API Key)"
+  description: "API Key secured Petstore API"
+  version: "1.0.0"
+  type: PROXY
+  state: STARTED
+  lifecycleState: PUBLISHED
+  
+  listeners:
+    - type: HTTP
+      paths:
+        - path: /petstore-apikey/v3
+      entrypoints:
+        - type: http-proxy
+  
+  endpointGroups:
+    - name: default-group
+      type: http-proxy
+      endpoints:
+        - name: petstore-backend
+          type: http-proxy
+          target: https://petstore3.swagger.io/api/v3
+  
+  plans:
+    api-key:
+      name: "API Key Plan"
+      description: "Requires valid API key in header or query param"
+      security:
+        type: API_KEY
+        configuration:
+          propagateApiKey: false
+      status: PUBLISHED
+      validation: AUTO
+      order: 1
+      flows:
+        - enabled: true
+          selectors:
+            - type: HTTP
+              path: /
+              pathOperator: STARTS_WITH
+

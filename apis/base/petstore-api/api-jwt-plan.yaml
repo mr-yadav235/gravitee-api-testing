@@ -1,0 +1,92 @@
+# JWT Plan for Petstore API - Keycloak Integration
+# This plan requires a valid JWT token from Keycloak
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiV4Definition
+metadata:
+  name: petstore-api-jwt
+  namespace: gravitee-apis
+  labels:
+    app.kubernetes.io/name: petstore-api
+    app.kubernetes.io/component: api
+    security: jwt
+    team: platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # Reference to Management Context
+  contextRef:
+    name: local-gravitee
+    namespace: gravitee-gko
+  
+  # API Definition
+  name: "Petstore API (JWT Secured)"
+  description: "Swagger Petstore API with JWT authentication via Keycloak"
+  version: "1.0.0"
+  
+  # API Type
+  type: PROXY
+  
+  # Listeners
+  listeners:
+    - type: HTTP
+      paths:
+        - path: /petstore-secure/v3
+      entrypoints:
+        - type: http-proxy
+  
+  # Endpoints
+  endpointGroups:
+    - name: default
+      type: http-proxy
+      endpoints:
+        - name: petstore-backend
+          type: http-proxy
+          target: https://petstore3.swagger.io/api/v3
+          weight: 1
+  
+  # Flows
+  flows:
+    - name: "Authenticated Flow"
+      enabled: true
+      selectors:
+        - type: HTTP
+          path: /
+          pathOperator: STARTS_WITH
+      request:
+        - name: "Add User Context"
+          enabled: true
+          policy: transform-headers
+          configuration:
+            addHeaders:
+              - name: X-User-Id
+                value: "{#context.attributes['jwt.claims']['sub']}"
+              - name: X-User-Email
+                value: "{#context.attributes['jwt.claims']['email']}"
+  
+  # Plans with JWT Security
+  plans:
+    jwt-keycloak:
+      name: "JWT-Keycloak"
+      description: "JWT validation using Keycloak JWKS"
+      security:
+        type: JWT
+        configuration:
+          signature: RSA_RS256
+          publicKeyResolver: JWKS_URL
+          resolverParameter: "http://keycloak.gravitee.svc.cluster.local:8080/realms/gravitee/protocol/openid-connect/certs"
+          extractClaims: true
+          propagateAuthHeader: true
+      status: PUBLISHED
+      validation: AUTO
+      flows:
+        - enabled: true
+          selectors:
+            - type: HTTP
+              path: /
+              pathOperator: STARTS_WITH
+  
+  # Lifecycle
+  state: STARTED
+  lifecycleState: PUBLISHED
+

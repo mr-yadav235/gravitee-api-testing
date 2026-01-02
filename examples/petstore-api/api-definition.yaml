@@ -1,0 +1,114 @@
+# Petstore API Definition for Gravitee APIM
+# This example shows how to pass path and query parameters to backend
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: petstore-api
+  namespace: gravitee
+spec:
+  name: "Petstore API"
+  version: "1.0.0"
+  description: "Sample Petstore API demonstrating path and query parameter passing"
+  
+  # Gateway context path - requests to /petstore/* will be routed
+  contextPath: /petstore
+  
+  # Backend endpoint configuration
+  endpoint: https://petstore.swagger.io/v2
+  
+  # Proxy configuration
+  proxy:
+    # Virtual hosts (optional)
+    virtual_hosts:
+      - path: /petstore
+    
+    # Strip context path - if true, /petstore/pet becomes /pet on backend
+    strip_context_path: true
+    
+    # Preserve host header
+    preserve_host: false
+    
+    # Backend groups
+    groups:
+      - name: default-group
+        endpoints:
+          - name: petstore-backend
+            target: https://petstore.swagger.io/v2
+            weight: 1
+            backup: false
+            type: http
+            inherit: true
+            # HTTP Configuration
+            http:
+              connectTimeout: 5000
+              idleTimeout: 60000
+              keepAlive: true
+              readTimeout: 10000
+              pipelining: false
+              maxConcurrentConnections: 100
+              useCompression: true
+              followRedirects: false
+
+  # Flow configuration for request/response handling
+  flows:
+    # Flow for /pet/findByStatus endpoint
+    - name: "Find Pets by Status"
+      path-operator:
+        path: /pet/findByStatus
+        operator: EQUALS
+      methods:
+        - GET
+      enabled: true
+      # Pre-request policies (before calling backend)
+      pre: []
+      # Post-response policies (after receiving response)
+      post: []
+      
+    # Flow for /pet/{petId} endpoint - with path parameter
+    - name: "Get Pet by ID"
+      path-operator:
+        path: /pet/:petId
+        operator: EQUALS
+      methods:
+        - GET
+      enabled: true
+      pre: []
+      post: []
+      
+    # Flow for all /pet/* endpoints
+    - name: "All Pet Operations"
+      path-operator:
+        path: /pet
+        operator: STARTS_WITH
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+      enabled: true
+      pre: []
+      post: []
+
+  # Plans for API access
+  plans:
+    - name: "Free Plan"
+      description: "Open access plan"
+      security: KEY_LESS
+      status: PUBLISHED
+      flows: []
+
+---
+# API Plan for the Petstore API
+apiVersion: gravitee.io/v1alpha1
+kind: ApiPlan
+metadata:
+  name: petstore-api-plan
+  namespace: gravitee
+spec:
+  apiRef:
+    name: petstore-api
+  name: "Open Plan"
+  description: "Open access to Petstore API"
+  security: KEY_LESS
+  status: PUBLISHED
+

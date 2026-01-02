@@ -1,0 +1,62 @@
+# Gravitee Subscription CRD
+# Links an Application to an API Plan
+---
+apiVersion: gravitee.io/v1alpha1
+kind: Subscription
+metadata:
+  name: mobile-app-petstore-jwt
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: mobile-app-petstore-subscription
+    app.kubernetes.io/component: subscription
+    api: petstore-api-secured
+    application: mobile-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  # Reference to the API
+  api:
+    name: petstore-api-secured
+    namespace: gravitee-apis-dev
+  
+  # Reference to the Plan
+  plan: jwt-keycloak
+  
+  # Reference to the Application
+  application:
+    name: mobile-app
+    namespace: gravitee-apis-dev
+  
+  # Subscription metadata
+  metadata:
+    clientId: "mobile-app-client"
+---
+# Web Portal subscription to API Key plan
+apiVersion: gravitee.io/v1alpha1
+kind: Subscription
+metadata:
+  name: web-portal-petstore-apikey
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: web-portal-petstore-subscription
+    api: petstore-api-apikey
+    application: web-portal
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  api:
+    name: petstore-api-apikey
+    namespace: gravitee-apis-dev
+  
+  plan: api-key
+  
+  application:
+    name: web-portal
+    namespace: gravitee-apis-dev
+

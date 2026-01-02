@@ -1,0 +1,63 @@
+# Gravitee Kubernetes Operator (GKO) Installation
+# Install with: helm upgrade --install gravitee-gko graviteeio/gko -f install.yaml -n gravitee-gko
+---
+# Helm values for GKO installation
+# Save as values.yaml and use with helm install
+
+# Manager configuration
+manager:
+  # Cluster-wide scope (watch all namespaces)
+  scope:
+    cluster: true
+  
+  # Resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  # Logging
+  logs:
+    level: info
+    format: json
+  
+  # Metrics
+  metrics:
+    enabled: true
+    port: 8080
+
+# RBAC configuration
+rbac:
+  create: true
+
+# Service Account
+serviceAccount:
+  create: true
+  name: gravitee-gko
+
+# Pod security
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node selector (optional)
+nodeSelector: {}
+
+# Tolerations (optional)
+tolerations: []
+
+# Affinity (optional)
+affinity: {}
+---
+# Namespace for GKO
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gravitee-gko
+  labels:
+    app.kubernetes.io/name: gravitee-gko
+    app.kubernetes.io/part-of: cicd
+

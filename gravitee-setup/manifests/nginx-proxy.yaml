@@ -1,0 +1,120 @@
+# Nginx Proxy for Gravitee APIM
+# Handles path rewriting and provides single-port access to UI and API
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-proxy-config
+  namespace: gravitee
+data:
+  nginx.conf: |
+    server {
+        listen 8080;
+        
+        # Proxy UI requests
+        location / {
+            proxy_pass http://gravitee-apim-ui:8002/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Rewrite base href for proper asset loading
+            sub_filter '<base href="/console/">' '<base href="/">';
+            sub_filter '"baseURL": "http://localhost:8083/management"' '"baseURL": "/management"';
+            sub_filter_once off;
+            sub_filter_types text/html application/json;
+        }
+        
+        # Proxy Management API requests
+        location /management/ {
+            proxy_pass http://gravitee-apim-api:83/management/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Origin http://localhost:8080;
+            
+            # CORS headers
+            add_header Access-Control-Allow-Origin $http_origin always;
+            add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With" always;
+            add_header Access-Control-Allow-Credentials true always;
+            
+            if ($request_method = OPTIONS) {
+                return 204;
+            }
+        }
+        
+        # Health check endpoint
+        location /health {
+            return 200 'OK';
+            add_header Content-Type text/plain;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gravitee-proxy
+  namespace: gravitee
+  labels:
+    app: gravitee-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gravitee-proxy
+  template:
+    metadata:
+      labels:
+        app: gravitee-proxy
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: nginx.conf
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: config
+        configMap:
+          name: nginx-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gravitee-proxy
+  namespace: gravitee
+  labels:
+    app: gravitee-proxy
+spec:
+  selector:
+    app: gravitee-proxy
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+

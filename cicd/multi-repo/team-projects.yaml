@@ -1,0 +1,208 @@
+# ArgoCD Projects for Each Team
+# Defines permissions and boundaries for team-specific deployments
+---
+# Payments Team Project
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: payments-team
+  namespace: argocd
+  labels:
+    team: payments
+spec:
+  description: "Payments Team API Definitions"
+  
+  sourceRepos:
+    - 'https://github.com/mr-yadav235/gravitee-api-payments.git'
+    - 'https://github.com/mr-yadav235/gravitee-platform.git'  # Shared configs
+  
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  # Only allow Gravitee CRDs and basic resources
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: gravitee.io
+      kind: ApiV4Definition
+    - group: gravitee.io
+      kind: Application
+    - group: gravitee.io
+      kind: Subscription
+  
+  # Team roles
+  roles:
+    - name: developer
+      description: "Payments team developers"
+      policies:
+        - p, proj:payments-team:developer, applications, get, payments-team/*, allow
+        - p, proj:payments-team:developer, applications, sync, payments-team/*-dev, allow
+        - p, proj:payments-team:developer, applications, sync, payments-team/*-uat, allow
+        - p, proj:payments-team:developer, logs, get, payments-team/*, allow
+      groups:
+        - payments-developers
+    
+    - name: lead
+      description: "Payments team leads - can deploy to prod"
+      policies:
+        - p, proj:payments-team:lead, applications, *, payments-team/*, allow
+      groups:
+        - payments-leads
+  
+  # Sync windows
+  syncWindows:
+    - kind: allow
+      schedule: '* * * * *'
+      duration: 24h
+      applications:
+        - '*-dev'
+        - '*-uat'
+    - kind: allow
+      schedule: '0 9-17 * * 1-5'
+      duration: 8h
+      applications:
+        - '*-prod'
+      manualSync: true
+---
+# Catalog Team Project
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: catalog-team
+  namespace: argocd
+  labels:
+    team: catalog
+spec:
+  description: "Catalog Team API Definitions"
+  
+  sourceRepos:
+    - 'https://github.com/mr-yadav235/gravitee-api-catalog.git'
+    - 'https://github.com/mr-yadav235/gravitee-platform.git'
+  
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: gravitee.io
+      kind: '*'
+  
+  roles:
+    - name: developer
+      policies:
+        - p, proj:catalog-team:developer, applications, get, catalog-team/*, allow
+        - p, proj:catalog-team:developer, applications, sync, catalog-team/*-dev, allow
+        - p, proj:catalog-team:developer, applications, sync, catalog-team/*-uat, allow
+      groups:
+        - catalog-developers
+    - name: lead
+      policies:
+        - p, proj:catalog-team:lead, applications, *, catalog-team/*, allow
+      groups:
+        - catalog-leads
+---
+# Orders Team Project
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: orders-team
+  namespace: argocd
+  labels:
+    team: orders
+spec:
+  description: "Orders Team API Definitions"
+  
+  sourceRepos:
+    - 'https://github.com/mr-yadav235/gravitee-api-orders.git'
+    - 'https://github.com/mr-yadav235/gravitee-platform.git'
+  
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: gravitee.io
+      kind: '*'
+  
+  roles:
+    - name: developer
+      policies:
+        - p, proj:orders-team:developer, applications, get, orders-team/*, allow
+        - p, proj:orders-team:developer, applications, sync, orders-team/*-dev, allow
+        - p, proj:orders-team:developer, applications, sync, orders-team/*-uat, allow
+      groups:
+        - orders-developers
+    - name: lead
+      policies:
+        - p, proj:orders-team:lead, applications, *, orders-team/*, allow
+      groups:
+        - orders-leads
+---
+# Users Team Project
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: users-team
+  namespace: argocd
+  labels:
+    team: users
+spec:
+  description: "Users Team API Definitions"
+  
+  sourceRepos:
+    - 'https://github.com/mr-yadav235/gravitee-api-users.git'
+    - 'https://github.com/mr-yadav235/gravitee-platform.git'
+  
+  destinations:
+    - namespace: gravitee-apis-dev
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-uat
+      server: https://kubernetes.default.svc
+    - namespace: gravitee-apis-prod
+      server: https://kubernetes.default.svc
+  
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: gravitee.io
+      kind: '*'
+  
+  roles:
+    - name: developer
+      policies:
+        - p, proj:users-team:developer, applications, get, users-team/*, allow
+        - p, proj:users-team:developer, applications, sync, users-team/*-dev, allow
+        - p, proj:users-team:developer, applications, sync, users-team/*-uat, allow
+      groups:
+        - users-developers
+    - name: lead
+      policies:
+        - p, proj:users-team:lead, applications, *, users-team/*, allow
+      groups:
+        - users-leads
+

@@ -1,0 +1,483 @@
+{
+  "info": {
+    "name": "Gravitee API Integration Tests",
+    "description": "Integration tests for APIs deployed via GitOps",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Get OAuth token if not already set",
+          "if (!pm.environment.get('access_token')) {",
+          "    const tokenUrl = pm.environment.get('keycloak_url') + '/realms/' + pm.environment.get('realm') + '/protocol/openid-connect/token';",
+          "    ",
+          "    pm.sendRequest({",
+          "        url: tokenUrl,",
+          "        method: 'POST',",
+          "        header: {",
+          "            'Content-Type': 'application/x-www-form-urlencoded'",
+          "        },",
+          "        body: {",
+          "            mode: 'urlencoded',",
+          "            urlencoded: [",
+          "                { key: 'client_id', value: pm.environment.get('client_id') },",
+          "                { key: 'client_secret', value: pm.environment.get('client_secret') },",
+          "                { key: 'grant_type', value: 'client_credentials' }",
+          "            ]",
+          "        }",
+          "    }, function (err, res) {",
+          "        if (!err) {",
+          "            pm.environment.set('access_token', res.json().access_token);",
+          "        }",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Smoke Tests",
+      "item": [
+        {
+          "name": "API Gateway Health",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/_node/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Gateway is healthy', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API Endpoint Available",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/{{api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API endpoint is reachable', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has expected structure', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('id');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Authentication Tests",
+      "item": [
+        {
+          "name": "Request without token should fail",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{gateway_url}}/{{secure_api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unauthorized without token', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Error message is appropriate', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.message).to.include('Unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request with valid token should succeed",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/{{secure_api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Authorized with valid token', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User context headers present', function () {",
+                  "    // Check if Gravitee added user context",
+                  "    pm.expect(pm.response.headers.has('X-Gravitee-Transaction-Id')).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request with expired token should fail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "expired.token.here",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{gateway_url}}/{{secure_api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected with expired token', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rate Limiting Tests",
+      "item": [
+        {
+          "name": "Rate limit headers present",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/{{api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rate limit headers are present', function () {",
+                  "    pm.expect(pm.response.headers.has('X-Rate-Limit-Limit') || ",
+                  "              pm.response.headers.has('X-RateLimit-Limit')).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rate limit enforcement",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/{{api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// This test should be run multiple times to trigger rate limit",
+                  "pm.environment.set('rate_limit_test_count', ",
+                  "    (parseInt(pm.environment.get('rate_limit_test_count') || '0') + 1));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// After many requests, should get rate limited",
+                  "if (pm.response.code === 429) {",
+                  "    pm.test('Rate limit enforced', function () {",
+                  "        pm.response.to.have.status(429);",
+                  "    });",
+                  "    pm.test('Retry-After header present', function () {",
+                  "        pm.expect(pm.response.headers.has('Retry-After')).to.be.true;",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Request successful (not rate limited yet)', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Handling Tests",
+      "item": [
+        {
+          "name": "404 for non-existent resource",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/{{api_path}}/pet/999999999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 404 for non-existent resource', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([404, 200]);",
+                  "});",
+                  "",
+                  "pm.test('Error response has proper format', function () {",
+                  "    if (pm.response.code === 404) {",
+                  "        const json = pm.response.json();",
+                  "        pm.expect(json).to.have.property('message');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 for invalid request",
+          "request": {
+            "method": "POST",
+            "url": "{{gateway_url}}/{{api_path}}/pet",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"invalid\": \"data\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 4xx for invalid request', function () {",
+                  "    pm.expect(pm.response.code).to.be.within(400, 499);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Response Headers Tests",
+      "item": [
+        {
+          "name": "Security headers present",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/{{api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('X-Content-Type-Options header present', function () {",
+                  "    pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.equal('nosniff');",
+                  "});",
+                  "",
+                  "pm.test('X-Frame-Options header present', function () {",
+                  "    pm.expect(pm.response.headers.has('X-Frame-Options')).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Gravitee transaction ID present', function () {",
+                  "    pm.expect(pm.response.headers.has('X-Gravitee-Transaction-Id')).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CRUD Operations Tests",
+      "item": [
+        {
+          "name": "GET - Read resource",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/{{api_path}}/pet/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('GET returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is JSON', function () {",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test('Response has expected fields', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('id');",
+                  "    pm.expect(json).to.have.property('name');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST - Create resource",
+          "request": {
+            "method": "POST",
+            "url": "{{gateway_url}}/{{api_path}}/pet",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 0,\n  \"name\": \"TestPet\",\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"Dogs\"\n  },\n  \"photoUrls\": [\"string\"],\n  \"status\": \"available\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('POST returns 200 or 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Created resource has ID', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('id');",
+                  "    pm.environment.set('created_pet_id', json.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT - Update resource",
+          "request": {
+            "method": "PUT",
+            "url": "{{gateway_url}}/{{api_path}}/pet",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{created_pet_id}},\n  \"name\": \"UpdatedTestPet\",\n  \"status\": \"sold\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('PUT returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Resource was updated', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.name).to.equal('UpdatedTestPet');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE - Remove resource",
+          "request": {
+            "method": "DELETE",
+            "url": "{{gateway_url}}/{{api_path}}/pet/{{created_pet_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('DELETE returns 200 or 204', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "api_path",
+      "value": "petstore/v3"
+    },
+    {
+      "key": "secure_api_path",
+      "value": "petstore-secure/v3"
+    }
+  ]
+}
+

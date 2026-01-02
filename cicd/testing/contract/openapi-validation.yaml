@@ -1,0 +1,173 @@
+# Spectral Ruleset for OpenAPI Contract Validation
+# Used to validate API contracts against organizational standards
+
+extends:
+  - spectral:oas
+
+rules:
+  # ===== Naming Conventions =====
+  operation-operationId-valid-in-url:
+    description: "operationId must be valid for URLs"
+    given: "$.paths[*][*].operationId"
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        match: "^[a-zA-Z][a-zA-Z0-9]*$"
+
+  path-params-camel-case:
+    description: "Path parameters should be camelCase"
+    given: "$.paths[*].parameters[?(@.in == 'path')].name"
+    severity: warn
+    then:
+      function: casing
+      functionOptions:
+        type: camel
+
+  # ===== Security =====
+  security-defined:
+    description: "API must have security defined"
+    given: "$"
+    severity: error
+    then:
+      field: security
+      function: truthy
+
+  no-http-basic:
+    description: "HTTP Basic auth is not allowed"
+    given: "$.components.securitySchemes[*]"
+    severity: error
+    then:
+      field: type
+      function: pattern
+      functionOptions:
+        notMatch: "^http$"
+
+  oauth2-or-jwt-required:
+    description: "APIs must use OAuth2 or JWT authentication"
+    given: "$.components.securitySchemes"
+    severity: warn
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: [oauth2]
+            - required: [bearerAuth]
+            - required: [jwt]
+
+  # ===== Versioning =====
+  api-version-in-path:
+    description: "API version should be in the path"
+    given: "$.paths"
+    severity: warn
+    then:
+      function: pattern
+      functionOptions:
+        match: "^/v[0-9]+/"
+
+  info-version-semver:
+    description: "API version must follow semver"
+    given: "$.info.version"
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        match: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+
+  # ===== Documentation =====
+  operation-description:
+    description: "Operations must have descriptions"
+    given: "$.paths[*][get,post,put,patch,delete]"
+    severity: warn
+    then:
+      field: description
+      function: truthy
+
+  operation-tags:
+    description: "Operations must have tags"
+    given: "$.paths[*][get,post,put,patch,delete]"
+    severity: warn
+    then:
+      field: tags
+      function: truthy
+
+  tag-description:
+    description: "Tags must have descriptions"
+    given: "$.tags[*]"
+    severity: warn
+    then:
+      field: description
+      function: truthy
+
+  # ===== Response Standards =====
+  response-4xx-problem-json:
+    description: "4xx responses should use application/problem+json"
+    given: "$.paths[*][*].responses[?(@property >= 400 && @property < 500)].content"
+    severity: info
+    then:
+      field: "application/problem+json"
+      function: truthy
+
+  response-must-have-schema:
+    description: "Responses must have schemas defined"
+    given: "$.paths[*][*].responses[*].content[*]"
+    severity: error
+    then:
+      field: schema
+      function: truthy
+
+  # ===== Request Standards =====
+  request-body-required:
+    description: "POST/PUT/PATCH should have request body"
+    given: "$.paths[*][post,put,patch]"
+    severity: warn
+    then:
+      field: requestBody
+      function: truthy
+
+  # ===== Error Handling =====
+  must-have-error-responses:
+    description: "Operations must define error responses"
+    given: "$.paths[*][get,post,put,patch,delete].responses"
+    severity: warn
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: ["400"]
+            - required: ["401"]
+            - required: ["404"]
+            - required: ["500"]
+
+  # ===== Performance =====
+  pagination-for-lists:
+    description: "List endpoints should support pagination"
+    given: "$.paths[*].get"
+    severity: info
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          properties:
+            parameters:
+              type: array
+              contains:
+                type: object
+                properties:
+                  name:
+                    enum: [page, limit, offset, cursor]
+
+  # ===== Deprecation =====
+  deprecated-operations-documented:
+    description: "Deprecated operations must have sunset date"
+    given: "$.paths[*][?(@.deprecated == true)]"
+    severity: warn
+    then:
+      field: "x-sunset-date"
+      function: truthy
+

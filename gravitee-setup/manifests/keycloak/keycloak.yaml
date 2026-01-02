@@ -1,0 +1,237 @@
+# Keycloak Authorization Server for Gravitee APIM
+# This provides OAuth2/OpenID Connect authentication
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-secrets
+  namespace: gravitee
+type: Opaque
+stringData:
+  KEYCLOAK_ADMIN: admin
+  KEYCLOAK_ADMIN_PASSWORD: admin123
+  KC_DB_PASSWORD: keycloak123
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-config
+  namespace: gravitee
+data:
+  # Realm configuration for Gravitee APIs
+  gravitee-realm.json: |
+    {
+      "realm": "gravitee",
+      "enabled": true,
+      "sslRequired": "none",
+      "registrationAllowed": true,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": true,
+      "editUsernameAllowed": false,
+      "bruteForceProtected": true,
+      "accessTokenLifespan": 300,
+      "accessTokenLifespanForImplicitFlow": 900,
+      "ssoSessionIdleTimeout": 1800,
+      "ssoSessionMaxLifespan": 36000,
+      "offlineSessionIdleTimeout": 2592000,
+      "accessCodeLifespan": 60,
+      "accessCodeLifespanUserAction": 300,
+      "accessCodeLifespanLogin": 1800,
+      "clients": [
+        {
+          "clientId": "gravitee-gateway",
+          "name": "Gravitee API Gateway",
+          "description": "Client for Gravitee API Gateway OAuth2 Resource Server",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "gravitee-gateway-secret",
+          "bearerOnly": true,
+          "publicClient": false,
+          "protocol": "openid-connect",
+          "fullScopeAllowed": true
+        },
+        {
+          "clientId": "gravitee-console",
+          "name": "Gravitee Console",
+          "description": "Client for Gravitee Management Console SSO",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "gravitee-console-secret",
+          "publicClient": false,
+          "protocol": "openid-connect",
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": false,
+          "redirectUris": [
+            "http://localhost:8080/*",
+            "http://localhost:8084/*"
+          ],
+          "webOrigins": [
+            "http://localhost:8080",
+            "http://localhost:8084"
+          ],
+          "fullScopeAllowed": true,
+          "defaultClientScopes": ["openid", "profile", "email"]
+        },
+        {
+          "clientId": "api-client",
+          "name": "API Client Application",
+          "description": "Sample client for API consumers",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "api-client-secret",
+          "publicClient": false,
+          "protocol": "openid-connect",
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": true,
+          "redirectUris": ["*"],
+          "webOrigins": ["*"],
+          "fullScopeAllowed": true,
+          "defaultClientScopes": ["openid", "profile", "email"]
+        }
+      ],
+      "users": [
+        {
+          "username": "apiuser",
+          "email": "apiuser@example.com",
+          "enabled": true,
+          "emailVerified": true,
+          "firstName": "API",
+          "lastName": "User",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "apiuser123",
+              "temporary": false
+            }
+          ],
+          "realmRoles": ["user"]
+        },
+        {
+          "username": "apiadmin",
+          "email": "apiadmin@example.com",
+          "enabled": true,
+          "emailVerified": true,
+          "firstName": "API",
+          "lastName": "Admin",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "apiadmin123",
+              "temporary": false
+            }
+          ],
+          "realmRoles": ["user", "admin"]
+        }
+      ],
+      "roles": {
+        "realm": [
+          {
+            "name": "user",
+            "description": "Regular API user"
+          },
+          {
+            "name": "admin",
+            "description": "API administrator"
+          }
+        ]
+      },
+      "scopeMappings": [
+        {
+          "client": "api-client",
+          "roles": ["user"]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: gravitee
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+      - name: keycloak
+        image: quay.io/keycloak/keycloak:23.0
+        args:
+        - start-dev
+        - --import-realm
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: KEYCLOAK_ADMIN
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-secrets
+              key: KEYCLOAK_ADMIN
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-secrets
+              key: KEYCLOAK_ADMIN_PASSWORD
+        - name: KC_HEALTH_ENABLED
+          value: "true"
+        - name: KC_METRICS_ENABLED
+          value: "true"
+        - name: KC_HTTP_RELATIVE_PATH
+          value: "/"
+        volumeMounts:
+        - name: realm-config
+          mountPath: /opt/keycloak/data/import
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 120
+          periodSeconds: 30
+      volumes:
+      - name: realm-config
+        configMap:
+          name: keycloak-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: gravitee
+  labels:
+    app: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+
+

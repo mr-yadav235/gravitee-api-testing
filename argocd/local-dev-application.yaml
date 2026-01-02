@@ -1,0 +1,34 @@
+# ArgoCD Application for Local Development
+# This uses a directory-based source for testing without GitHub
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gravitee-apis-local
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: gravitee-apis
+    environment: local
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  # Source - using directory plugin for local files
+  source:
+    repoURL: https://github.com/placeholder/repo.git  # Placeholder - will be replaced
+    targetRevision: HEAD
+    path: apis/overlays/dev
+    
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gravitee-apis-dev
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+

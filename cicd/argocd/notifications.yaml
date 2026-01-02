@@ -1,0 +1,167 @@
+# ArgoCD Notifications Configuration
+# Sends alerts to Slack/Teams on sync events
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-notifications-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Notification services
+  service.slack: |
+    token: $slack-token
+    
+  service.webhook.teams: |
+    url: $teams-webhook-url
+    headers:
+      - name: Content-Type
+        value: application/json
+
+  # Notification templates
+  template.app-sync-succeeded: |
+    slack:
+      attachments: |
+        [{
+          "color": "#18be52",
+          "title": "✅ {{.app.metadata.name}} synced successfully",
+          "fields": [
+            {"title": "Application", "value": "{{.app.metadata.name}}", "short": true},
+            {"title": "Environment", "value": "{{.app.metadata.labels.environment}}", "short": true},
+            {"title": "Revision", "value": "{{.app.status.sync.revision | substr 0 7}}", "short": true},
+            {"title": "Sync Status", "value": "{{.app.status.sync.status}}", "short": true}
+          ],
+          "footer": "ArgoCD | Gravitee APIs",
+          "ts": "{{now.Unix}}"
+        }]
+    webhook:
+      teams:
+        method: POST
+        body: |
+          {
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "themeColor": "18be52",
+            "summary": "{{.app.metadata.name}} synced successfully",
+            "sections": [{
+              "activityTitle": "✅ API Deployment Succeeded",
+              "facts": [
+                {"name": "Application", "value": "{{.app.metadata.name}}"},
+                {"name": "Environment", "value": "{{.app.metadata.labels.environment}}"},
+                {"name": "Revision", "value": "{{.app.status.sync.revision | substr 0 7}}"}
+              ]
+            }]
+          }
+
+  template.app-sync-failed: |
+    slack:
+      attachments: |
+        [{
+          "color": "#E96D76",
+          "title": "❌ {{.app.metadata.name}} sync failed",
+          "fields": [
+            {"title": "Application", "value": "{{.app.metadata.name}}", "short": true},
+            {"title": "Environment", "value": "{{.app.metadata.labels.environment}}", "short": true},
+            {"title": "Error", "value": "{{.app.status.operationState.message | substr 0 200}}", "short": false}
+          ],
+          "footer": "ArgoCD | Gravitee APIs",
+          "ts": "{{now.Unix}}"
+        }]
+    webhook:
+      teams:
+        method: POST
+        body: |
+          {
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "themeColor": "E96D76",
+            "summary": "{{.app.metadata.name}} sync failed",
+            "sections": [{
+              "activityTitle": "❌ API Deployment Failed",
+              "facts": [
+                {"name": "Application", "value": "{{.app.metadata.name}}"},
+                {"name": "Environment", "value": "{{.app.metadata.labels.environment}}"},
+                {"name": "Error", "value": "{{.app.status.operationState.message | substr 0 200}}"}
+              ]
+            }]
+          }
+
+  template.app-health-degraded: |
+    slack:
+      attachments: |
+        [{
+          "color": "#f4c030",
+          "title": "⚠️ {{.app.metadata.name}} health degraded",
+          "fields": [
+            {"title": "Application", "value": "{{.app.metadata.name}}", "short": true},
+            {"title": "Environment", "value": "{{.app.metadata.labels.environment}}", "short": true},
+            {"title": "Health Status", "value": "{{.app.status.health.status}}", "short": true}
+          ],
+          "footer": "ArgoCD | Gravitee APIs",
+          "ts": "{{now.Unix}}"
+        }]
+
+  template.app-deployed: |
+    slack:
+      attachments: |
+        [{
+          "color": "#18be52",
+          "title": "🚀 {{.app.metadata.name}} deployed to {{.app.metadata.labels.environment}}",
+          "fields": [
+            {"title": "Application", "value": "{{.app.metadata.name}}", "short": true},
+            {"title": "Environment", "value": "{{.app.metadata.labels.environment}}", "short": true},
+            {"title": "Revision", "value": "{{.app.status.sync.revision | substr 0 7}}", "short": true},
+            {"title": "Health", "value": "{{.app.status.health.status}}", "short": true}
+          ],
+          "footer": "ArgoCD | Gravitee APIs"
+        }]
+
+  # Triggers
+  trigger.on-sync-succeeded: |
+    - when: app.status.operationState.phase in ['Succeeded']
+      send: [app-sync-succeeded, app-deployed]
+      
+  trigger.on-sync-failed: |
+    - when: app.status.operationState.phase in ['Error', 'Failed']
+      send: [app-sync-failed]
+      
+  trigger.on-health-degraded: |
+    - when: app.status.health.status == 'Degraded'
+      send: [app-health-degraded]
+
+  # Default triggers for all applications
+  defaultTriggers: |
+    - on-sync-succeeded
+    - on-sync-failed
+    - on-health-degraded
+
+  # Subscriptions (which apps get which notifications)
+  subscriptions: |
+    - recipients:
+        - slack:gravitee-deployments
+      triggers:
+        - on-sync-succeeded
+        - on-deployed
+    - recipients:
+        - slack:gravitee-alerts
+      triggers:
+        - on-sync-failed
+        - on-health-degraded
+---
+# Secret for notification tokens
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-notifications-secret
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-notifications-secret
+    app.kubernetes.io/part-of: argocd
+type: Opaque
+stringData:
+  # Replace with actual tokens
+  slack-token: "xoxb-YOUR-SLACK-BOT-TOKEN"
+  teams-webhook-url: "https://outlook.office.com/webhook/YOUR-TEAMS-WEBHOOK"
+

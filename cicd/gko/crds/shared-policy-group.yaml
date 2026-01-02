@@ -1,0 +1,140 @@
+# Shared Policy Group CRD
+# Reusable policy configurations that can be applied to multiple APIs
+---
+apiVersion: gravitee.io/v1alpha1
+kind: SharedPolicyGroup
+metadata:
+  name: standard-security-headers
+  namespace: gravitee-gko
+  labels:
+    app.kubernetes.io/name: security-headers
+    app.kubernetes.io/component: policy
+    type: security
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Standard Security Headers"
+  description: "Adds standard security headers to all API responses"
+  
+  # Phase: REQUEST or RESPONSE
+  phase: RESPONSE
+  
+  # Policies in this group
+  policies:
+    - name: "Security Headers"
+      enabled: true
+      policy: transform-headers
+      configuration:
+        scope: RESPONSE
+        addHeaders:
+          - name: X-Content-Type-Options
+            value: "nosniff"
+          - name: X-Frame-Options
+            value: "DENY"
+          - name: X-XSS-Protection
+            value: "1; mode=block"
+          - name: Strict-Transport-Security
+            value: "max-age=31536000; includeSubDomains"
+          - name: Content-Security-Policy
+            value: "default-src 'self'"
+          - name: Referrer-Policy
+            value: "strict-origin-when-cross-origin"
+---
+# Rate Limiting Policy Group
+apiVersion: gravitee.io/v1alpha1
+kind: SharedPolicyGroup
+metadata:
+  name: standard-rate-limit
+  namespace: gravitee-gko
+  labels:
+    app.kubernetes.io/name: rate-limit
+    app.kubernetes.io/component: policy
+    type: traffic
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Standard Rate Limiting"
+  description: "Standard rate limiting policy - 100 requests per minute"
+  phase: REQUEST
+  
+  policies:
+    - name: "Rate Limit"
+      enabled: true
+      policy: rate-limit
+      configuration:
+        rate:
+          periodTime: 1
+          periodTimeUnit: MINUTES
+          limit: 100
+        key: "{#request.headers['X-Forwarded-For'] ?: #request.remoteAddress}"
+---
+# Request Validation Policy Group
+apiVersion: gravitee.io/v1alpha1
+kind: SharedPolicyGroup
+metadata:
+  name: json-validation
+  namespace: gravitee-gko
+  labels:
+    app.kubernetes.io/name: json-validation
+    app.kubernetes.io/component: policy
+    type: validation
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "JSON Request Validation"
+  description: "Validates incoming JSON requests"
+  phase: REQUEST
+  
+  policies:
+    - name: "JSON Validation"
+      enabled: true
+      policy: json-validation
+      configuration:
+        scope: REQUEST
+        errorMessage: "Invalid JSON payload"
+---
+# Logging Policy Group
+apiVersion: gravitee.io/v1alpha1
+kind: SharedPolicyGroup
+metadata:
+  name: audit-logging
+  namespace: gravitee-gko
+  labels:
+    app.kubernetes.io/name: audit-logging
+    app.kubernetes.io/component: policy
+    type: observability
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Audit Logging"
+  description: "Comprehensive audit logging for compliance"
+  phase: REQUEST
+  
+  policies:
+    - name: "Assign Attributes"
+      enabled: true
+      policy: assign-attributes
+      configuration:
+        scope: REQUEST
+        attributes:
+          - name: audit.timestamp
+            value: "{#timestamp}"
+          - name: audit.clientIp
+            value: "{#request.headers['X-Forwarded-For'] ?: #request.remoteAddress}"
+          - name: audit.userAgent
+            value: "{#request.headers['User-Agent']}"
+          - name: audit.method
+            value: "{#request.method}"
+          - name: audit.path
+            value: "{#request.path}"
+

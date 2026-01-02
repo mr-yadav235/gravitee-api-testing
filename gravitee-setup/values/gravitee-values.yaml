@@ -1,0 +1,82 @@
+# Gravitee APIM Helm Values for Local Development
+# Use with: helm install gravitee-apim graviteeio/apim -f gravitee-values.yaml
+
+# MongoDB Configuration (using external MongoDB)
+mongo:
+  enabled: false
+  uri: "mongodb://gravitee:gravitee123@mongodb.gravitee.svc.cluster.local:27017/gravitee?authSource=gravitee"
+
+# Elasticsearch Configuration (using external Elasticsearch)
+es:
+  enabled: false
+  endpoints:
+    - http://elasticsearch-master.gravitee.svc.cluster.local:9200
+  security:
+    enabled: false
+  ssl:
+    enabled: false
+
+# Installation Configuration
+installation:
+  type: standalone
+  api:
+    url: http://localhost:8080/management
+  standalone:
+    console:
+      url: http://localhost:8080
+    portal:
+      url: http://localhost:8080
+
+# Gateway Configuration
+gateway:
+  replicaCount: 1
+  ingress:
+    enabled: false
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# Management API Configuration
+api:
+  replicaCount: 1
+  ingress:
+    enabled: false
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# Management UI Configuration
+ui:
+  replicaCount: 1
+  ingress:
+    enabled: false
+  baseURL: http://localhost:8080/management
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "100m"
+
+# Developer Portal Configuration
+portal:
+  replicaCount: 1
+  ingress:
+    enabled: false
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "100m"
+

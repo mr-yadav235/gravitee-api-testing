@@ -385,24 +385,56 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate-crds, security-scan, policy-validation]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
     
     steps:
       - name: Trigger ArgoCD Sync
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
         run: |
-          echo "ArgoCD will automatically sync based on Git changes"
-          echo "Manual sync can be triggered via ArgoCD CLI or UI"
+          echo "### 🔄 ArgoCD Sync Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Optional: Trigger ArgoCD sync via API
-          # curl -X POST \
-          #   -H "Authorization: Bearer ${{ secrets.ARGOCD_TOKEN }}" \
-          #   "${{ secrets.ARGOCD_SERVER }}/api/v1/applications/gravitee-apis-prod/sync"
+          if [ -n "$ARGOCD_SERVER" ] && [ -n "$ARGOCD_TOKEN" ]; then
+            echo "Triggering ArgoCD sync for dev environment..."
+            
+            # Sync dev application
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              -H "Authorization: Bearer $ARGOCD_TOKEN" \
+              -H "Content-Type: application/json" \
+              "$ARGOCD_SERVER/api/v1/applications/gravitee-apis-dev/sync" \
+              -d '{"prune": true}' 2>/dev/null || echo "error")
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Dev sync triggered successfully" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚠️ Dev sync request returned: $HTTP_CODE" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Environment | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Dev | Sync Triggered |" >> $GITHUB_STEP_SUMMARY
+            echo "| UAT | Manual Approval Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| Prod | Manual Approval Required |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ ArgoCD credentials not configured. Skipping sync trigger." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To enable automatic sync, add these secrets:" >> $GITHUB_STEP_SUMMARY
+            echo "- \`ARGOCD_SERVER\`: Your ArgoCD server URL" >> $GITHUB_STEP_SUMMARY
+            echo "- \`ARGOCD_TOKEN\`: ArgoCD API token" >> $GITHUB_STEP_SUMMARY
+          fi
       
       - name: Create deployment record
         run: |
-          echo "Commit: ${{ github.sha }}"
-          echo "Author: ${{ github.actor }}"
-          echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📝 Deployment Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Author:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # Summary Report

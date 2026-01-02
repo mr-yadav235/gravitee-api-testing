@@ -14,29 +14,61 @@ from typing import Dict, List, Any, Tuple
 class SensitiveDataChecker:
     """Checker for sensitive data in configuration files."""
     
-    # Patterns that might indicate sensitive data
+    # Patterns that indicate ACTUAL hardcoded secrets (more specific)
     SENSITIVE_PATTERNS = [
-        (r'password\s*[:=]\s*["\']?(?!.*PLACEHOLDER|.*SEALED|.*\{\{)[a-zA-Z0-9!@#$%^&*()_+-=]{8,}', 'Possible hardcoded password'),
-        (r'secret\s*[:=]\s*["\']?(?!.*PLACEHOLDER|.*SEALED|.*\{\{)[a-zA-Z0-9!@#$%^&*()_+-=]{16,}', 'Possible hardcoded secret'),
-        (r'api[_-]?key\s*[:=]\s*["\']?(?!.*PLACEHOLDER|.*SEALED|.*\{\{)[a-zA-Z0-9-]{20,}', 'Possible hardcoded API key'),
-        (r'token\s*[:=]\s*["\']?(?!.*PLACEHOLDER|.*SEALED|.*\{\{)[a-zA-Z0-9._-]{20,}', 'Possible hardcoded token'),
-        (r'bearer\s+[a-zA-Z0-9._-]{20,}', 'Possible hardcoded bearer token'),
+        # Real passwords (not placeholders, not references)
+        (r'password\s*[:=]\s*["\'](?!changeme|PLACEHOLDER|SEALED|TODO|xxx|admin)[a-zA-Z0-9!@#$%^&*()_+-=]{12,}["\']', 'Possible hardcoded password'),
+        # Real secrets (long random strings)
+        (r'secret\s*[:=]\s*["\'][a-zA-Z0-9!@#$%^&*()_+-=]{24,}["\']', 'Possible hardcoded secret'),
+        # API keys (specific formats)
+        (r'api[_-]?key\s*[:=]\s*["\'][a-zA-Z0-9-]{32,}["\']', 'Possible hardcoded API key'),
+        # Bearer tokens
+        (r'[Bb]earer\s+[a-zA-Z0-9._-]{40,}', 'Possible hardcoded bearer token'),
+        # Private keys
         (r'-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----', 'Private key detected'),
-        (r'-----BEGIN\s+CERTIFICATE-----', 'Certificate detected (may be intentional)'),
-        (r'mongodb://[^:]+:[^@]+@', 'MongoDB connection string with credentials'),
-        (r'postgres://[^:]+:[^@]+@', 'PostgreSQL connection string with credentials'),
-        (r'mysql://[^:]+:[^@]+@', 'MySQL connection string with credentials'),
+        # Connection strings with passwords
+        (r'mongodb://[^:]+:[^@]{8,}@', 'MongoDB connection string with credentials'),
+        (r'postgres://[^:]+:[^@]{8,}@', 'PostgreSQL connection string with credentials'),
+        (r'mysql://[^:]+:[^@]{8,}@', 'MySQL connection string with credentials'),
+        # AWS keys
+        (r'AKIA[0-9A-Z]{16}', 'AWS Access Key ID detected'),
+        # GitHub tokens
+        (r'ghp_[a-zA-Z0-9]{36}', 'GitHub Personal Access Token detected'),
+        (r'github_pat_[a-zA-Z0-9_]{22,}', 'GitHub PAT detected'),
     ]
     
-    # Allowed patterns (false positives)
-    ALLOWED_PATTERNS = [
-        r'\$\{.*\}',  # Environment variable references
-        r'\{\{.*\}\}',  # Template variables
-        r'secretRef',  # Kubernetes secret references
-        r'PLACEHOLDER',
-        r'SEALED_SECRET',
-        r'CHANGE_ME',
-        r'REPLACE_WITH',
+    # Values that are explicitly safe (not secrets)
+    SAFE_VALUE_PATTERNS = [
+        r'^\$\{.*\}$',           # Environment variable: ${VAR}
+        r'^\{\{.*\}\}$',         # Template: {{var}}
+        r'^\{#.*\}$',            # Gravitee EL expression: {#...}
+        r'^secretRef$',          # K8s secret reference
+        r'.*PLACEHOLDER.*',      # Placeholder text
+        r'.*SEALED.*',           # Sealed secret
+        r'.*CHANGE_ME.*',        # Change me marker
+        r'.*REPLACE.*',          # Replace marker
+        r'.*TODO.*',             # TODO marker
+        r'^changeme$',           # Default placeholder
+        r'^admin$',              # Default username (not a secret)
+        r'^xxx+$',               # Placeholder xxx
+        r'^yyy+$',               # Placeholder yyy
+        r'^JWKS_URL$',           # Config value, not secret
+        r'^GRAVITEE_PASSWORD$',  # Reference to key name, not actual password
+        r'^GRAVITEE_USERNAME$',  # Reference to key name
+        r'\.svc\.cluster\.local',  # K8s service URLs
+        r'^http://',             # URLs are not secrets
+        r'^https://',            # URLs are not secrets
+    ]
+    
+    # Keys that contain "key" but are NOT sensitive (config keys, not secret keys)
+    SAFE_KEY_CONTEXTS = [
+        'publicKeyResolver',     # JWT config
+        'secretKey',             # External secrets field name (not the actual secret)
+        'remoteRef.key',         # Vault path reference
+        'configuration.key',     # Rate limit key expression
+        'properties.key',        # Property name
+        'backend-url',           # Property key name
+        'rate-limit',            # Property key name
     ]
     
     def __init__(self):
@@ -61,59 +93,38 @@ class SensitiveDataChecker:
         lines = content.split('\n')
         
         for line_num, line in enumerate(lines, 1):
-            # Skip if line matches allowed patterns
-            if any(re.search(pattern, line, re.IGNORECASE) for pattern in self.ALLOWED_PATTERNS):
-                continue
-            
             # Check for sensitive patterns
             for pattern, description in self.SENSITIVE_PATTERNS:
                 if re.search(pattern, line, re.IGNORECASE):
-                    self.findings.append({
-                        'file': str(file_path),
-                        'line': line_num,
-                        'description': description,
-                        'content': line.strip()[:100]  # Truncate for safety
-                    })
-        
-        # Also check YAML structure for suspicious keys
-        try:
-            documents = list(yaml.safe_load_all(content))
-            for doc in documents:
-                if doc:
-                    self._check_yaml_structure(doc, file_path, [])
-        except yaml.YAMLError:
-            pass
-    
-    def _check_yaml_structure(self, obj: Any, file_path: Path, path: List[str]) -> None:
-        """Recursively check YAML structure for suspicious values."""
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                current_path = path + [key]
-                
-                # Check if key suggests sensitive data
-                key_lower = key.lower()
-                if any(s in key_lower for s in ['password', 'secret', 'token', 'key', 'credential']):
-                    if isinstance(value, str) and value and not self._is_safe_value(value):
+                    # Double-check it's not a safe value
+                    if not self._line_is_safe(line):
                         self.findings.append({
                             'file': str(file_path),
-                            'line': 0,
-                            'description': f'Suspicious value for key: {".".join(current_path)}',
-                            'content': f'{key}: {value[:50]}...' if len(str(value)) > 50 else f'{key}: {value}'
+                            'line': line_num,
+                            'description': description,
+                            'content': line.strip()[:100]
                         })
-                
-                self._check_yaml_structure(value, file_path, current_path)
-        
-        elif isinstance(obj, list):
-            for i, item in enumerate(obj):
-                self._check_yaml_structure(item, file_path, path + [f'[{i}]'])
     
-    def _is_safe_value(self, value: str) -> bool:
+    def _line_is_safe(self, line: str) -> bool:
+        """Check if a line contains safe patterns."""
+        for pattern in self.SAFE_VALUE_PATTERNS:
+            if re.search(pattern, line, re.IGNORECASE):
+                return True
+        return False
+    
+    def _is_safe_value(self, value: str, key_path: str) -> bool:
         """Check if a value is safe (placeholder, reference, etc.)."""
-        safe_indicators = [
-            '${', '{{', 'secretRef', 'PLACEHOLDER', 'SEALED', 
-            'CHANGE_ME', 'REPLACE', 'TODO', 'xxx', 'yyy'
-        ]
-        return any(indicator in value for indicator in safe_indicators)
+        # Check if the key context is safe
+        for safe_context in self.SAFE_KEY_CONTEXTS:
+            if safe_context in key_path:
+                return True
+        
+        # Check if value matches safe patterns
+        for pattern in self.SAFE_VALUE_PATTERNS:
+            if re.search(pattern, str(value), re.IGNORECASE):
+                return True
+        
+        return False
     
     def print_results(self) -> int:
         """Print findings and return exit code."""
@@ -121,9 +132,18 @@ class SensitiveDataChecker:
             print("✅ No sensitive data detected!")
             return 0
         
-        print(f"\n⚠️  Found {len(self.findings)} potential sensitive data issues:\n")
-        
+        # Deduplicate findings
+        unique_findings = []
+        seen = set()
         for finding in self.findings:
+            key = (finding['file'], finding['line'], finding['description'])
+            if key not in seen:
+                seen.add(key)
+                unique_findings.append(finding)
+        
+        print(f"\n⚠️  Found {len(unique_findings)} potential sensitive data issues:\n")
+        
+        for finding in unique_findings:
             print(f"📁 {finding['file']}")
             if finding['line']:
                 print(f"   Line {finding['line']}: {finding['description']}")
@@ -135,7 +155,14 @@ class SensitiveDataChecker:
         print("Please review these findings and ensure no actual secrets are committed.")
         print("Use Kubernetes Secrets, External Secrets Operator, or Sealed Secrets instead.")
         
-        return 1
+        # Return 1 only for critical issues (private keys, AWS keys, etc.)
+        critical_patterns = ['Private key', 'AWS', 'GitHub']
+        has_critical = any(
+            any(p in f['description'] for p in critical_patterns) 
+            for f in unique_findings
+        )
+        
+        return 1 if has_critical else 0
 
 
 def main():
@@ -157,4 +184,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

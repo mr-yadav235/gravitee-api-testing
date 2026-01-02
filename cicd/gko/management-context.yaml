@@ -1,74 +1,27 @@
 # ManagementContext - Connection to Gravitee APIM
 # This tells GKO how to communicate with Gravitee Management API
 ---
-apiVersion: gravitee.io/v1alpha1
-kind: ManagementContext
-metadata:
-  name: gravitee-apim
-  namespace: gravitee-gko
-  labels:
-    app.kubernetes.io/name: gravitee-management-context
-    app.kubernetes.io/part-of: cicd
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"  # Deploy before APIs
-spec:
-  # Gravitee Management API URL
-  # For local/minikube: use internal service URL
-  # For production: use external URL or ingress
-  baseUrl: http://gravitee-apim-api.gravitee.svc.cluster.local:83/management
-  
-  # Environment and Organization IDs
-  environmentId: DEFAULT
-  organizationId: DEFAULT
-  
-  # Authentication
-  auth:
-    secretRef:
-      name: gravitee-admin-credentials
-      namespace: gravitee-gko
-    credentials:
-      username: GRAVITEE_USERNAME
-      password: GRAVITEE_PASSWORD
----
-# Credentials Secret
-# NOTE: In production, use External Secrets Operator or Sealed Secrets
 apiVersion: v1
 kind: Secret
 metadata:
   name: gravitee-admin-credentials
   namespace: gravitee-gko
-  labels:
-    app.kubernetes.io/name: gravitee-credentials
-    app.kubernetes.io/part-of: cicd
-  annotations:
-    argocd.argoproj.io/sync-wave: "-2"  # Deploy before ManagementContext
 type: Opaque
 stringData:
-  GRAVITEE_USERNAME: admin
-  GRAVITEE_PASSWORD: admin
+  username: admin
+  password: admin
 ---
-# External Secret Example (for production)
-# Uncomment and configure for your secrets manager
-# apiVersion: external-secrets.io/v1beta1
-# kind: ExternalSecret
-# metadata:
-#   name: gravitee-admin-credentials
-#   namespace: gravitee-gko
-# spec:
-#   refreshInterval: 1h
-#   secretStoreRef:
-#     name: vault-backend
-#     kind: ClusterSecretStore
-#   target:
-#     name: gravitee-admin-credentials
-#     creationPolicy: Owner
-#   data:
-#     - secretKey: GRAVITEE_USERNAME
-#       remoteRef:
-#         key: gravitee/admin
-#         property: username
-#     - secretKey: GRAVITEE_PASSWORD
-#       remoteRef:
-#         key: gravitee/admin
-#         property: password
-
+apiVersion: gravitee.io/v1alpha1
+kind: ManagementContext
+metadata:
+  name: gravitee-apim
+  namespace: gravitee-gko
+spec:
+  # NOTE: baseUrl should NOT include /management - GKO adds it automatically
+  baseUrl: http://gravitee-apim-api.gravitee.svc.cluster.local:83
+  environmentId: DEFAULT
+  organizationId: DEFAULT
+  auth:
+    secretRef:
+      name: gravitee-admin-credentials
+      namespace: gravitee-gko

@@ -1,0 +1,103 @@
+# Petstore API Definition for GKO (V2 Format)
+# This is the working format for Gravitee 4.x
+---
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: petstore-api
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: petstore-api
+    team: platform
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Petstore API (GitOps)"
+  description: "Swagger Petstore API managed via ArgoCD and GKO"
+  version: "1.0.0"
+  
+  # Proxy configuration
+  proxy:
+    virtual_hosts:
+      - path: /petstore-gitops/v3
+    groups:
+      - name: default
+        endpoints:
+          - name: petstore-backend
+            target: https://petstore3.swagger.io/api/v3
+  
+  # Flows (policies)
+  flows:
+    - name: "All Requests"
+      path-operator:
+        path: /
+        operator: STARTS_WITH
+      pre:
+        - name: "Add Headers"
+          policy: transform-headers
+          configuration:
+            addHeaders:
+              - name: X-Source
+                value: gravitee-gitops
+              - name: X-Request-Id
+                value: "{#request.id}"
+      post:
+        - name: "Response Headers"
+          policy: transform-headers
+          configuration:
+            addHeaders:
+              - name: X-Powered-By
+                value: Gravitee-GKO
+  
+  # Plans
+  plans:
+    - name: "Keyless Plan"
+      description: "Open access - no authentication"
+      security: KEY_LESS
+      status: PUBLISHED
+---
+# JWT Secured Version
+apiVersion: gravitee.io/v1alpha1
+kind: ApiDefinition
+metadata:
+  name: petstore-api-jwt
+  namespace: gravitee-apis-dev
+  labels:
+    app.kubernetes.io/name: petstore-api-jwt
+    security: jwt
+    team: platform
+spec:
+  contextRef:
+    name: gravitee-apim
+    namespace: gravitee-gko
+  
+  name: "Petstore API JWT (GitOps)"
+  description: "JWT-secured Petstore API"
+  version: "1.0.0"
+  
+  proxy:
+    virtual_hosts:
+      - path: /petstore-jwt-gitops/v3
+    groups:
+      - name: default
+        endpoints:
+          - name: petstore-backend
+            target: https://petstore3.swagger.io/api/v3
+  
+  # JWT Plan
+  plans:
+    - name: "JWT-Keycloak"
+      description: "JWT authentication via Keycloak"
+      security: JWT
+      securityDefinition: |
+        {
+          "signature": "RSA_RS256",
+          "publicKeyResolver": "JWKS_URL",
+          "resolverParameter": "http://keycloak.gravitee.svc.cluster.local:8080/realms/gravitee/protocol/openid-connect/certs",
+          "extractClaims": true,
+          "propagateAuthHeader": true
+        }
+      status: PUBLISHED
+

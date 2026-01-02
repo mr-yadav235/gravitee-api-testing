@@ -26,6 +26,11 @@ GitOps-driven CI/CD solution for managing APIs in Gravitee APIM Gateway using th
 │   │   ├── security/            # Security tests
 │   │   └── smoke/               # Smoke tests
 │   └── workflows/               # Test-specific GitHub Actions
+├── gravitee-setup/              # 🚀 Local Gravitee APIM setup
+│   ├── docs/                    # Setup documentation
+│   ├── manifests/               # Kubernetes manifests
+│   ├── values/                  # Helm values files
+│   └── scripts/                 # Setup automation scripts
 ├── apis/
 │   ├── base/                    # Base API definitions (source of truth)
 │   │   ├── users-api/
@@ -209,6 +214,7 @@ Monitor sync status at: `https://<argocd-server>/applications`
 
 ## 📚 Documentation
 
+- [Gravitee Minikube Setup](gravitee-setup/) - Complete local setup guide with scripts
 - [GitOps Guide](docs/GITOPS_GUIDE.md) - Detailed GitOps workflow documentation
 - [Multi-Repo Guide](docs/MULTI_REPO_GUIDE.md) - Team-based multi-repository setup
 - [API Testing Strategy](api-testing/docs/API_TESTING_STRATEGY.md) - Comprehensive testing documentation

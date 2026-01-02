@@ -23,6 +23,7 @@ resources:
   - orders-api/api-plan.yaml
   - products-api/api-definition.yaml
   - products-api/api-plan.yaml
+  - petstore-api/api-definition.yaml
 
 # ConfigMap generator for shared configurations
 configMapGenerator:

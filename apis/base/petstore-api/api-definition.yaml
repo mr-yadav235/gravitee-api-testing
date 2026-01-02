@@ -17,15 +17,15 @@ spec:
   contextRef:
     name: local-gravitee
     namespace: gravitee-gko
-  
+
   # API Definition
   name: "Petstore API"
   description: "Swagger Petstore API - Managed via GitOps"
   version: "1.0.0"
-  
+
   # API Type
   type: PROXY
-  
+
   # Listeners (entrypoints)
   listeners:
     - type: HTTP
@@ -33,7 +33,7 @@ spec:
         - path: /petstore/v3
       entrypoints:
         - type: http-proxy
-  
+
   # Endpoints (backend)
   endpointGroups:
     - name: default
@@ -46,7 +46,7 @@ spec:
           configuration:
             connectTimeout: 5000
             readTimeout: 10000
-  
+
   # Flows (policies)
   flows:
     - name: "Default Flow"
@@ -73,7 +73,7 @@ spec:
             addHeaders:
               - name: X-Powered-By
                 value: "Gravitee-GKO"
-  
+
   # Plans (security)
   plans:
     keyless:
@@ -88,7 +88,7 @@ spec:
             - type: HTTP
               path: /
               pathOperator: STARTS_WITH
-  
+
   # Lifecycle
   state: STARTED
   lifecycleState: PUBLISHED

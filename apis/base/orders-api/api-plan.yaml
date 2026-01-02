@@ -15,19 +15,19 @@ spec:
   apiRef:
     name: orders-api
     namespace: gravitee-apis
-  
+
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   name: "Standard Plan"
   description: "Standard access to Orders API"
-  
+
   order: 1
   security: API_KEY
   status: PUBLISHED
   validation: AUTO
-  
+
   flows:
     - name: "Standard Limits"
       pathOperator:
@@ -43,7 +43,7 @@ spec:
               limit: 100
               periodTime: 1
               periodTimeUnit: MINUTES
-  
+
   characteristics:
     - "100 requests/minute"
     - "Standard support"

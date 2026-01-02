@@ -18,15 +18,15 @@ spec:
   contextRef:
     name: local-gravitee
     namespace: gravitee-gko
-  
+
   # API Definition
   name: "Petstore API (JWT Secured)"
   description: "Swagger Petstore API with JWT authentication via Keycloak"
   version: "1.0.0"
-  
+
   # API Type
   type: PROXY
-  
+
   # Listeners
   listeners:
     - type: HTTP
@@ -34,7 +34,7 @@ spec:
         - path: /petstore-secure/v3
       entrypoints:
         - type: http-proxy
-  
+
   # Endpoints
   endpointGroups:
     - name: default
@@ -44,7 +44,7 @@ spec:
           type: http-proxy
           target: https://petstore3.swagger.io/api/v3
           weight: 1
-  
+
   # Flows
   flows:
     - name: "Authenticated Flow"
@@ -63,7 +63,7 @@ spec:
                 value: "{#context.attributes['jwt.claims']['sub']}"
               - name: X-User-Email
                 value: "{#context.attributes['jwt.claims']['email']}"
-  
+
   # Plans with JWT Security
   plans:
     jwt-keycloak:
@@ -85,7 +85,7 @@ spec:
             - type: HTTP
               path: /
               pathOperator: STARTS_WITH
-  
+
   # Lifecycle
   state: STARTED
   lifecycleState: PUBLISHED

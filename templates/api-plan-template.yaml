@@ -1,6 +1,6 @@
 # API Plan Template for Gravitee Kubernetes Operator
 # Use this template to create API plans (subscription tiers)
-# 
+#
 # Instructions:
 # 1. Copy this file to apis/base/<api-name>/api-plan.yaml
 # 2. Replace all {{PLACEHOLDER}} values
@@ -25,19 +25,19 @@ spec:
   apiRef:
     name: "{{API_NAME}}"
     namespace: gravitee-apis
-  
+
   # Reference to ManagementContext
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   # Plan details
   name: "Free Plan"
   description: "Free tier with limited access"
-  
+
   # Display order in portal (lower = first)
   order: 1
-  
+
   # Security type:
   # - API_KEY: Requires API key header
   # - JWT: Requires JWT token
@@ -45,13 +45,13 @@ spec:
   # - KEY_LESS: No authentication (public)
   # - MTLS: Mutual TLS
   security: API_KEY
-  
+
   # Plan status: STAGING, PUBLISHED, DEPRECATED, CLOSED
   status: PUBLISHED
-  
+
   # Subscription validation: AUTO (immediate) or MANUAL (requires approval)
   validation: AUTO
-  
+
   # Rate limiting and quota for this plan
   flows:
     - name: "Free Tier Limits"
@@ -70,7 +70,7 @@ spec:
               periodTime: 1           # Time period
               periodTimeUnit: DAYS    # SECONDS, MINUTES, HOURS, DAYS, WEEKS, MONTHS
             key: "{#subscription.id}"
-        
+
         # Per-minute rate limit
         - name: "Rate Limit"
           policy: rate-limit
@@ -80,7 +80,7 @@ spec:
               limit: 10
               periodTime: 1
               periodTimeUnit: MINUTES
-  
+
   # Plan characteristics shown in portal
   characteristics:
     - "100 requests/day"
@@ -104,19 +104,19 @@ spec:
   apiRef:
     name: "{{API_NAME}}"
     namespace: gravitee-apis
-  
+
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   name: "Standard Plan"
   description: "Standard tier for production workloads"
-  
+
   order: 2
   security: API_KEY
   status: PUBLISHED
   validation: MANUAL  # Requires approval
-  
+
   flows:
     - name: "Standard Tier Limits"
       pathOperator:
@@ -133,7 +133,7 @@ spec:
               periodTime: 1
               periodTimeUnit: DAYS
             key: "{#subscription.id}"
-        
+
         - name: "Rate Limit"
           policy: rate-limit
           enabled: true
@@ -142,7 +142,7 @@ spec:
               limit: 100
               periodTime: 1
               periodTimeUnit: MINUTES
-  
+
   characteristics:
     - "10,000 requests/day"
     - "100 requests/minute"
@@ -166,19 +166,19 @@ spec:
   apiRef:
     name: "{{API_NAME}}"
     namespace: gravitee-apis
-  
+
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   name: "Enterprise Plan"
   description: "Enterprise tier with premium features"
-  
+
   order: 3
   security: JWT
   status: PUBLISHED
   validation: MANUAL
-  
+
   # JWT security configuration
   securityDefinition: |
     {
@@ -188,7 +188,7 @@ spec:
       "userClaim": "sub",
       "clientIdClaim": "azp"
     }
-  
+
   flows:
     - name: "Enterprise Tier Limits"
       pathOperator:
@@ -204,7 +204,7 @@ spec:
               limit: 1000
               periodTime: 1
               periodTimeUnit: MINUTES
-  
+
   characteristics:
     - "Unlimited requests"
     - "1,000 requests/minute"

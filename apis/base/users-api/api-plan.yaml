@@ -18,28 +18,28 @@ spec:
   apiRef:
     name: users-api
     namespace: gravitee-apis
-  
+
   # Reference to ManagementContext
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   # Plan details
   name: "Free Plan"
   description: "Free tier with limited access - 100 requests per day"
-  
+
   # Plan order (display order in portal)
   order: 1
-  
+
   # Security type
   security: API_KEY
-  
+
   # Plan status
   status: PUBLISHED
-  
+
   # Validation type for subscriptions
   validation: AUTO
-  
+
   # Rate limiting for this plan
   flows:
     - name: "Free Tier Rate Limit"
@@ -65,10 +65,10 @@ spec:
               limit: 10
               periodTime: 1
               periodTimeUnit: MINUTES
-  
+
   # Excluded groups (optional)
   excludedGroups: []
-  
+
   # Characteristics for portal display
   characteristics:
     - "100 requests/day"
@@ -92,19 +92,19 @@ spec:
   apiRef:
     name: users-api
     namespace: gravitee-apis
-  
+
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   name: "Standard Plan"
   description: "Standard tier for production workloads - 10,000 requests per day"
-  
+
   order: 2
   security: API_KEY
   status: PUBLISHED
   validation: MANUAL  # Requires approval
-  
+
   flows:
     - name: "Standard Tier Limits"
       pathOperator:
@@ -129,7 +129,7 @@ spec:
               limit: 100
               periodTime: 1
               periodTimeUnit: MINUTES
-  
+
   characteristics:
     - "10,000 requests/day"
     - "100 requests/minute"
@@ -153,19 +153,19 @@ spec:
   apiRef:
     name: users-api
     namespace: gravitee-apis
-  
+
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   name: "Enterprise Plan"
   description: "Enterprise tier with unlimited access and premium support"
-  
+
   order: 3
   security: JWT  # JWT-based authentication for enterprise
   status: PUBLISHED
   validation: MANUAL
-  
+
   # JWT security configuration
   securityDefinition: |
     {
@@ -175,7 +175,7 @@ spec:
       "userClaim": "sub",
       "clientIdClaim": "azp"
     }
-  
+
   flows:
     - name: "Enterprise Tier Limits"
       pathOperator:
@@ -191,7 +191,7 @@ spec:
               limit: 1000
               periodTime: 1
               periodTimeUnit: MINUTES
-  
+
   characteristics:
     - "Unlimited requests"
     - "1,000 requests/minute"

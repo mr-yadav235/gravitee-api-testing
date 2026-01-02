@@ -24,30 +24,30 @@ spec:
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   name: "Products API"
   version: "1.0.0"
   description: "RESTful API for product catalog management - Owned by Catalog Team"
-  
+
   visibility: PUBLIC
   lifecycleState: PUBLISHED
   state: STARTED
-  
+
   categories:
     - "E-Commerce"
     - "Catalog"
-  
+
   tags:
     - "products"
     - "catalog"
     - "inventory"
     - "catalog-team"
-  
+
   proxy:
     virtualHosts:
       - path: /api/v1/products
         overrideEntrypoint: true
-    
+
     groups:
       - name: default-group
         endpoints:
@@ -56,24 +56,24 @@ spec:
             target: http://products-service.catalog-team.svc.cluster.local:8080
             weight: 1
             type: http
-        
+
         loadBalancer:
           type: ROUND_ROBIN
-        
+
         http:
           connectTimeout: 3000
           readTimeout: 5000
           useCompression: true
-  
+
   flowMode: DEFAULT
-  
+
   flows:
     - name: "All Requests"
       pathOperator:
         path: /
         operator: STARTS_WITH
       enabled: true
-      
+
       pre:
         - name: "Rate Limiting"
           policy: rate-limit
@@ -83,7 +83,7 @@ spec:
               limit: 200
               periodTime: 1
               periodTimeUnit: MINUTES
-        
+
         - name: "Cache"
           policy: cache
           enabled: true
@@ -92,7 +92,7 @@ spec:
             timeToLiveSeconds: 300
             methods:
               - GET
-      
+
       post:
         - name: "CORS"
           policy: cors
@@ -107,12 +107,12 @@ spec:
               - Content-Type
               - Authorization
             accessControlMaxAge: 86400
-  
+
   analytics:
     enabled: true
     logging:
       mode: NONE
-  
+
   metadata:
     - name: team
       value: catalog-team

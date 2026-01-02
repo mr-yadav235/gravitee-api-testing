@@ -21,6 +21,9 @@ rules:
     ignore-shebangs: true
     min-spaces-from-content: 1
   
+  # Comment indentation - disable for flexibility in templates
+  comments-indentation: disable
+  
   # Document markers
   document-start:
     present: true

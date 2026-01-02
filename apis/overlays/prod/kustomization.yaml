@@ -1,3 +1,4 @@
+---
 # Production Environment Overlay
 # Customizes base API definitions for production environment
 apiVersion: kustomize.config.k8s.io/v1beta1

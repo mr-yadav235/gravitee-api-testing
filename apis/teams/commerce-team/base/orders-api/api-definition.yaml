@@ -24,30 +24,30 @@ spec:
   contextRef:
     name: gravitee-apim-context
     namespace: gravitee-apis
-  
+
   name: "Orders API"
   version: "1.0.0"
   description: "RESTful API for order management - Owned by Commerce Team"
-  
+
   visibility: PRIVATE
   lifecycleState: PUBLISHED
   state: STARTED
-  
+
   categories:
     - "E-Commerce"
     - "Orders"
-  
+
   tags:
     - "orders"
     - "commerce"
     - "transactions"
     - "commerce-team"
-  
+
   proxy:
     virtualHosts:
       - path: /api/v1/orders
         overrideEntrypoint: true
-    
+
     groups:
       - name: default-group
         endpoints:
@@ -56,26 +56,26 @@ spec:
             target: http://orders-service.commerce-team.svc.cluster.local:8080
             weight: 1
             type: http
-        
+
         loadBalancer:
           type: ROUND_ROBIN
-        
+
         http:
           connectTimeout: 5000
           idleTimeout: 60000
           maxConcurrentConnections: 100
           readTimeout: 30000  # Longer timeout for order processing
           useCompression: true
-  
+
   flowMode: DEFAULT
-  
+
   flows:
     - name: "All Requests"
       pathOperator:
         path: /
         operator: STARTS_WITH
       enabled: true
-      
+
       pre:
         - name: "Rate Limiting"
           policy: rate-limit
@@ -85,7 +85,7 @@ spec:
               limit: 50
               periodTime: 1
               periodTimeUnit: MINUTES
-        
+
         - name: "Add Correlation ID"
           policy: transform-headers
           enabled: true
@@ -94,7 +94,7 @@ spec:
             addHeaders:
               - name: X-Correlation-ID
                 value: "{#request.id}"
-      
+
       post:
         - name: "Response Headers"
           policy: transform-headers
@@ -104,7 +104,7 @@ spec:
             addHeaders:
               - name: X-Api-Version
                 value: "1.0.0"
-    
+
     # Order creation with validation
     - name: "Create Order"
       pathOperator:
@@ -113,7 +113,7 @@ spec:
       methods:
         - POST
       enabled: true
-      
+
       pre:
         - name: "Validate Order Payload"
           policy: json-validation
@@ -142,21 +142,21 @@ spec:
                 }
               }
             errorMessage: "Invalid order payload"
-  
+
   responseTemplates:
     DEFAULT:
       - statusCode: 500
         body: '{"error": "Order processing failed", "code": "ORDER_ERROR"}'
         headers:
           Content-Type: application/json
-  
+
   analytics:
     enabled: true
     logging:
       mode: CLIENT_PROXY
       content: HEADERS
       scope: REQUEST_RESPONSE
-  
+
   metadata:
     - name: team
       value: commerce-team

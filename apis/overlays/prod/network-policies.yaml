@@ -14,7 +14,7 @@ spec:
   policyTypes:
     - Ingress
     - Egress
-  
+
   ingress:
     # Allow from Gravitee Gateway
     - from:
@@ -27,13 +27,13 @@ spec:
       ports:
         - protocol: TCP
           port: 8082
-    
+
     # Allow from ArgoCD for GitOps sync
     - from:
         - namespaceSelector:
             matchLabels:
               app.kubernetes.io/name: argocd
-  
+
   egress:
     # Allow to Gravitee Management API
     - to:
@@ -46,7 +46,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8083
-    
+
     # Allow DNS resolution
     - to:
         - namespaceSelector: {}

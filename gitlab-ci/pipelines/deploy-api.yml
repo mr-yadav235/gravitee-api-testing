@@ -1,0 +1,215 @@
+# Deploy APIs via ArgoCD
+# GitLab CI equivalent of cicd/github-actions/deploy-api.yaml
+#
+# Triggers ArgoCD sync after merge
+
+# =============================================================================
+# Determine Target Environment
+# =============================================================================
+determine-environment:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - |
+      # Set environment based on branch or manual input
+      if [ -n "$DEPLOY_ENVIRONMENT" ]; then
+        ENVIRONMENT="$DEPLOY_ENVIRONMENT"
+      elif [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        ENVIRONMENT="prod"
+      elif [ "$CI_COMMIT_BRANCH" == "develop" ]; then
+        ENVIRONMENT="dev"
+      else
+        ENVIRONMENT="dev"
+      fi
+      
+      echo "ENVIRONMENT=$ENVIRONMENT" >> deploy.env
+      echo "Deploying to: $ENVIRONMENT"
+  artifacts:
+    reports:
+      dotenv: deploy.env
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# Deploy to Environment
+# =============================================================================
+deploy-api:
+  stage: deploy
+  image: ubuntu:22.04
+  needs:
+    - determine-environment
+  environment:
+    name: $ENVIRONMENT
+    url: $GATEWAY_URL
+  before_script:
+    - apt-get update && apt-get install -y curl
+    # Install ArgoCD CLI
+    - curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    - chmod +x argocd
+    - mv argocd /usr/local/bin/
+  script:
+    - |
+      APP_NAME="gravitee-apis-${ENVIRONMENT}"
+      echo "Deploying to $APP_NAME..."
+      
+      # Login to ArgoCD
+      argocd login $ARGOCD_SERVER \
+        --auth-token $ARGOCD_AUTH_TOKEN \
+        --grpc-web \
+        --insecure
+      
+      # Trigger sync
+      echo "Syncing $APP_NAME..."
+      argocd app sync $APP_NAME \
+        --grpc-web \
+        --prune \
+        --timeout 300
+      
+      # Wait for sync to complete
+      echo "Waiting for sync to complete..."
+      argocd app wait $APP_NAME \
+        --grpc-web \
+        --timeout 300
+      
+      # Get application status
+      echo ""
+      echo "=== Application Status ==="
+      argocd app get $APP_NAME --grpc-web
+  after_script:
+    # Slack notification
+    - |
+      if [ -n "$SLACK_WEBHOOK_URL" ]; then
+        if [ "$CI_JOB_STATUS" == "success" ]; then
+          MESSAGE="✅ API Deployment Successful\n*Environment:* ${ENVIRONMENT}\n*Commit:* ${CI_COMMIT_SHORT_SHA}\n*Actor:* ${GITLAB_USER_LOGIN}"
+        else
+          MESSAGE="❌ API Deployment Failed\n*Environment:* ${ENVIRONMENT}\n*Commit:* ${CI_COMMIT_SHORT_SHA}\n*Pipeline:* ${CI_PIPELINE_URL}"
+        fi
+        
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"$MESSAGE\"}" \
+          "$SLACK_WEBHOOK_URL" || true
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# Smoke Test after Deploy
+# =============================================================================
+smoke-test-deploy:
+  stage: test
+  image: ubuntu:22.04
+  needs:
+    - deploy-api
+  before_script:
+    - apt-get update && apt-get install -y curl
+  script:
+    - |
+      echo "Running smoke tests against ${GATEWAY_URL}..."
+      
+      # Set gateway URL based on environment
+      case $ENVIRONMENT in
+        dev)
+          GATEWAY_URL="${GATEWAY_URL_DEV}"
+          ;;
+        uat)
+          GATEWAY_URL="${GATEWAY_URL_UAT}"
+          ;;
+        prod)
+          GATEWAY_URL="${GATEWAY_URL_PROD}"
+          ;;
+      esac
+      
+      # Test API health
+      echo "Testing: $GATEWAY_URL/petstore/v3/pet/1"
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$GATEWAY_URL/petstore/v3/pet/1" || echo "000")
+      
+      if [ "$HTTP_CODE" == "200" ] || [ "$HTTP_CODE" == "401" ]; then
+        echo "✓ API endpoint responding (HTTP $HTTP_CODE)"
+      else
+        echo "✗ API endpoint not responding (HTTP $HTTP_CODE)"
+        exit 1
+      fi
+      
+      echo "✓ Smoke tests passed"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+
+# =============================================================================
+# Manual Deploy Jobs
+# =============================================================================
+deploy-to-dev:
+  stage: deploy
+  extends: .dev-environment
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    - chmod +x argocd && mv argocd /usr/local/bin/
+  script:
+    - |
+      argocd login $ARGOCD_SERVER --auth-token $ARGOCD_AUTH_TOKEN --grpc-web --insecure
+      argocd app sync gravitee-apis-dev --grpc-web --prune --timeout 300
+      argocd app wait gravitee-apis-dev --grpc-web --timeout 300
+  when: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+deploy-to-uat:
+  stage: deploy
+  extends: .uat-environment
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    - chmod +x argocd && mv argocd /usr/local/bin/
+  script:
+    - |
+      argocd login $ARGOCD_SERVER --auth-token $ARGOCD_AUTH_TOKEN --grpc-web --insecure
+      argocd app sync gravitee-apis-uat --grpc-web --prune --timeout 300
+      argocd app wait gravitee-apis-uat --grpc-web --timeout 300
+  when: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+deploy-to-prod:
+  stage: deploy
+  extends: .prod-environment
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    - chmod +x argocd && mv argocd /usr/local/bin/
+  script:
+    - |
+      argocd login $ARGOCD_SERVER --auth-token $ARGOCD_AUTH_TOKEN --grpc-web --insecure
+      argocd app sync gravitee-apis-prod --grpc-web --prune --timeout 300
+      argocd app wait gravitee-apis-prod --grpc-web --timeout 300
+  when: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+

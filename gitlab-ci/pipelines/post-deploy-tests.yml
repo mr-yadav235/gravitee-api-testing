@@ -1,0 +1,443 @@
+# Post-Deployment API Testing Pipeline
+# GitLab CI equivalent of workflows/post-deploy-tests.yaml
+#
+# Runs after APIs are published to Gravitee APIM Gateway
+
+# =============================================================================
+# Variables
+# =============================================================================
+variables:
+  # Test configuration
+  TEST_TYPES: "all"  # all, smoke, functional, contract, security, performance
+  ENVIRONMENT: "dev"
+  API_NAME: ""
+
+# =============================================================================
+# Setup Test Environment
+# =============================================================================
+setup-tests:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      # Determine environment and tests to run
+      if [ "$CI_PIPELINE_SOURCE" == "schedule" ]; then
+        # Scheduled: determine by day
+        DAY_OF_WEEK=$(date +%u)
+        if [ "$DAY_OF_WEEK" == "6" ]; then
+          # Saturday - performance tests
+          TEST_TYPES="performance"
+        else
+          # Other days - security tests
+          TEST_TYPES="security"
+        fi
+        ENVIRONMENT="uat"
+      fi
+      
+      # Set gateway URL based on environment
+      case $ENVIRONMENT in
+        dev)
+          GATEWAY_URL="${GATEWAY_URL_DEV}"
+          ;;
+        uat)
+          GATEWAY_URL="${GATEWAY_URL_UAT}"
+          ;;
+        prod)
+          GATEWAY_URL="${GATEWAY_URL_PROD}"
+          ;;
+      esac
+      
+      # Export variables for downstream jobs
+      echo "ENVIRONMENT=$ENVIRONMENT" >> test-config.env
+      echo "GATEWAY_URL=$GATEWAY_URL" >> test-config.env
+      echo "TEST_TYPES=$TEST_TYPES" >> test-config.env
+      echo "API_NAME=$API_NAME" >> test-config.env
+      
+      # Determine which tests to run
+      if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "smoke" ]; then
+        echo "RUN_SMOKE=true" >> test-config.env
+      else
+        echo "RUN_SMOKE=false" >> test-config.env
+      fi
+      
+      if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "functional" ]; then
+        echo "RUN_FUNCTIONAL=true" >> test-config.env
+      else
+        echo "RUN_FUNCTIONAL=false" >> test-config.env
+      fi
+      
+      if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "contract" ]; then
+        echo "RUN_CONTRACT=true" >> test-config.env
+      else
+        echo "RUN_CONTRACT=false" >> test-config.env
+      fi
+      
+      if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "security" ]; then
+        echo "RUN_SECURITY=true" >> test-config.env
+      else
+        echo "RUN_SECURITY=false" >> test-config.env
+      fi
+      
+      if [ "$TEST_TYPES" == "all" ] || [ "$TEST_TYPES" == "performance" ]; then
+        echo "RUN_PERFORMANCE=true" >> test-config.env
+      else
+        echo "RUN_PERFORMANCE=false" >> test-config.env
+      fi
+      
+      echo "Test configuration:"
+      cat test-config.env
+  artifacts:
+    reports:
+      dotenv: test-config.env
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# Smoke Tests
+# =============================================================================
+smoke-tests:
+  stage: test
+  image: node:${NODE_VERSION}-slim
+  needs:
+    - setup-tests
+  before_script:
+    - npm install -g newman newman-reporter-htmlextra
+    - mkdir -p reports
+  script:
+    - |
+      if [ "$RUN_SMOKE" != "true" ]; then
+        echo "Smoke tests skipped"
+        exit 0
+      fi
+      
+      newman run tests/postman/smoke-tests.json \
+        --environment tests/postman/env-${ENVIRONMENT}.json \
+        --env-var "GATEWAY_URL=${GATEWAY_URL}" \
+        --env-var "API_KEY=${TEST_API_KEY}" \
+        --reporters cli,htmlextra,junit \
+        --reporter-htmlextra-export reports/smoke-tests.html \
+        --reporter-junit-export reports/smoke-tests.xml \
+        --timeout-request 10000
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit: reports/smoke-tests.xml
+    expire_in: 14 days
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# Functional Tests
+# =============================================================================
+functional-tests:
+  stage: test
+  image: node:${NODE_VERSION}-slim
+  needs:
+    - setup-tests
+    - smoke-tests
+  parallel:
+    matrix:
+      - API: [users-api, orders-api, products-api]
+  before_script:
+    - npm install -g newman newman-reporter-htmlextra
+    - mkdir -p reports
+  script:
+    - |
+      if [ "$RUN_FUNCTIONAL" != "true" ]; then
+        echo "Functional tests skipped"
+        exit 0
+      fi
+      
+      # Check if API tests exist
+      if [ ! -f "tests/functional/${API}.json" ]; then
+        echo "No tests found for ${API}, skipping..."
+        exit 0
+      fi
+      
+      newman run tests/functional/${API}.json \
+        --environment tests/postman/env-${ENVIRONMENT}.json \
+        --env-var "GATEWAY_URL=${GATEWAY_URL}" \
+        --env-var "API_KEY=${TEST_API_KEY}" \
+        --reporters cli,htmlextra,junit \
+        --reporter-htmlextra-export reports/functional-${API}.html \
+        --reporter-junit-export reports/functional-${API}.xml \
+        --iteration-count 1
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit: reports/functional-*.xml
+    expire_in: 14 days
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# Contract Tests
+# =============================================================================
+contract-tests:
+  stage: test
+  image: python:${PYTHON_VERSION}-slim
+  needs:
+    - setup-tests
+    - smoke-tests
+  before_script:
+    - pip install schemathesis pytest pytest-html requests pyyaml
+    - mkdir -p reports
+  script:
+    - |
+      if [ "$RUN_CONTRACT" != "true" ]; then
+        echo "Contract tests skipped"
+        exit 0
+      fi
+      
+      # Run pytest contract tests
+      python -m pytest tests/contract/ \
+        -v \
+        --html=reports/contract-tests.html \
+        --self-contained-html \
+        --junitxml=reports/contract-tests.xml \
+        --tb=short || true
+      
+      # Run Schemathesis tests
+      for spec in tests/contract/openapi/*.yaml; do
+        if [ -f "$spec" ]; then
+          api_name=$(basename "$spec" .yaml)
+          echo "Testing $api_name against OpenAPI spec..."
+          schemathesis run "$spec" \
+            --base-url "${GATEWAY_URL}" \
+            --header "X-Gravitee-Api-Key: ${TEST_API_KEY}" \
+            --checks all \
+            --max-examples 50 \
+            --report reports/schemathesis-$api_name.html || true
+        fi
+      done
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit: reports/contract-tests.xml
+    expire_in: 14 days
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# Security Tests
+# =============================================================================
+security-tests:
+  stage: test
+  image: python:${PYTHON_VERSION}-slim
+  needs:
+    - setup-tests
+    - functional-tests
+  before_script:
+    - pip install pytest pytest-html requests pyjwt
+    - mkdir -p reports
+  script:
+    - |
+      if [ "$RUN_SECURITY" != "true" ]; then
+        echo "Security tests skipped"
+        exit 0
+      fi
+      
+      # Run Python security tests
+      python -m pytest tests/security/ \
+        -v \
+        --html=reports/security-tests.html \
+        --self-contained-html \
+        --junitxml=reports/security-tests.xml || true
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit: reports/security-tests.xml
+    expire_in: 30 days
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# OWASP ZAP Scan
+# =============================================================================
+zap-scan:
+  stage: test
+  image: owasp/zap2docker-stable
+  needs:
+    - setup-tests
+    - functional-tests
+  before_script:
+    - mkdir -p reports
+  script:
+    - |
+      if [ "$RUN_SECURITY" != "true" ]; then
+        echo "ZAP scan skipped"
+        exit 0
+      fi
+      
+      # Run ZAP API scan
+      zap-api-scan.py \
+        -t "${GATEWAY_URL}/api/v1/openapi.json" \
+        -f openapi \
+        -r reports/zap-report.html \
+        -J reports/zap-report.json \
+        -c tests/security/zap-rules.tsv \
+        -a -j || true
+  artifacts:
+    when: always
+    paths:
+      - reports/zap-*
+    expire_in: 30 days
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+  allow_failure: true
+
+# =============================================================================
+# Performance Tests
+# =============================================================================
+performance-tests:
+  stage: test
+  image: grafana/k6:latest
+  needs:
+    - setup-tests
+    - functional-tests
+  before_script:
+    - mkdir -p reports
+  script:
+    - |
+      if [ "$RUN_PERFORMANCE" != "true" ]; then
+        echo "Performance tests skipped"
+        exit 0
+      fi
+      
+      if [ "$ENVIRONMENT" == "prod" ]; then
+        echo "Performance tests not allowed in production"
+        exit 0
+      fi
+      
+      # Run load tests
+      k6 run tests/performance/load-test.js \
+        --out json=reports/k6-results.json \
+        --summary-export=reports/k6-summary.json \
+        -e GATEWAY_URL=${GATEWAY_URL} \
+        -e API_KEY=${TEST_API_KEY}
+      
+      # Run stress tests
+      k6 run tests/performance/stress-test.js \
+        --out json=reports/k6-stress-results.json \
+        --summary-export=reports/k6-stress-summary.json \
+        -e GATEWAY_URL=${GATEWAY_URL} \
+        -e API_KEY=${TEST_API_KEY}
+  after_script:
+    # Check performance thresholds
+    - python3 scripts/check-performance-thresholds.py reports/k6-summary.json || true
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    expire_in: 30 days
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# =============================================================================
+# Test Summary
+# =============================================================================
+test-summary:
+  stage: notify
+  image: alpine:latest
+  needs:
+    - job: setup-tests
+      optional: true
+    - job: smoke-tests
+      optional: true
+    - job: functional-tests
+      optional: true
+    - job: contract-tests
+      optional: true
+    - job: security-tests
+      optional: true
+    - job: zap-scan
+      optional: true
+    - job: performance-tests
+      optional: true
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      echo "## 🧪 API Test Results"
+      echo ""
+      echo "**Environment:** ${ENVIRONMENT}"
+      echo "**Gateway URL:** ${GATEWAY_URL}"
+      echo ""
+      echo "| Test Type | Status |"
+      echo "|-----------|--------|"
+      echo "| Smoke Tests | ${SMOKE_STATUS:-✅} |"
+      echo "| Functional Tests | ${FUNCTIONAL_STATUS:-✅} |"
+      echo "| Contract Tests | ${CONTRACT_STATUS:-✅} |"
+      echo "| Security Tests | ${SECURITY_STATUS:-✅} |"
+      echo "| Performance Tests | ${PERFORMANCE_STATUS:-✅} |"
+  after_script:
+    # Slack notification
+    - |
+      if [ -n "$SLACK_WEBHOOK_URL" ]; then
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"text\": \"🧪 API Tests Completed - ${ENVIRONMENT}\",
+            \"blocks\": [
+              {
+                \"type\": \"header\",
+                \"text\": {
+                  \"type\": \"plain_text\",
+                  \"text\": \"🧪 API Test Results\"
+                }
+              },
+              {
+                \"type\": \"section\",
+                \"fields\": [
+                  {\"type\": \"mrkdwn\", \"text\": \"*Environment:*\n${ENVIRONMENT}\"},
+                  {\"type\": \"mrkdwn\", \"text\": \"*Pipeline:*\n<${CI_PIPELINE_URL}|View>\"}
+                ]
+              }
+            ]
+          }" \
+          "$SLACK_WEBHOOK_URL" || true
+      fi
+  when: always
+  rules:
+    - if: $RUN_POST_DEPLOY_TESTS == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+

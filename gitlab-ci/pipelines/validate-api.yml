@@ -1,0 +1,203 @@
+# Validate API Definitions
+# GitLab CI equivalent of cicd/github-actions/validate-api.yaml
+#
+# Runs on MR to validate GKO CRDs before merge
+
+# =============================================================================
+# Validate YAML Syntax
+# =============================================================================
+validate-yaml:
+  stage: validate
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - pip install yamllint
+  script:
+    - yamllint -c .yamllint.yaml cicd/
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+        - apis/**/*
+
+# =============================================================================
+# Validate Kustomize Build
+# =============================================================================
+validate-kustomize:
+  stage: validate
+  image: ubuntu:22.04
+  parallel:
+    matrix:
+      - ENVIRONMENT: [dev, uat, prod]
+  before_script:
+    - apt-get update && apt-get install -y curl
+    # Install kustomize
+    - curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz
+    - mv kustomize /usr/local/bin/
+  script:
+    - |
+      echo "Validating ${ENVIRONMENT} environment..."
+      kustomize build cicd/environments/${ENVIRONMENT} > /tmp/output.yaml
+      echo "✓ Kustomize build successful for ${ENVIRONMENT}"
+  artifacts:
+    paths:
+      - /tmp/output.yaml
+    expire_in: 1 day
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+        - apis/**/*
+
+# =============================================================================
+# Validate GKO CRDs
+# =============================================================================
+validate-gko-crds:
+  stage: validate
+  image: ubuntu:22.04
+  needs:
+    - validate-kustomize
+  before_script:
+    - apt-get update && apt-get install -y curl
+    # Install kubeconform
+    - curl -L https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz | tar xz
+    - mv kubeconform /usr/local/bin/
+  script:
+    - mkdir -p /tmp/schemas
+    # Download GKO CRD schemas
+    - |
+      curl -sL https://raw.githubusercontent.com/gravitee-io/gravitee-kubernetes-operator/master/helm/gko/crds/apim.gravitee.io_apidefinitions.yaml \
+        -o /tmp/schemas/apidefinition.yaml || true
+      curl -sL https://raw.githubusercontent.com/gravitee-io/gravitee-kubernetes-operator/master/helm/gko/crds/apim.gravitee.io_apiv4definitions.yaml \
+        -o /tmp/schemas/apiv4definition.yaml || true
+    # Validate CRDs
+    - |
+      echo "Validating GKO CRDs..."
+      find cicd/gko/crds -name "*.yaml" -exec kubeconform -strict -summary {} \;
+      echo "✓ All CRDs are valid"
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+        - apis/**/*
+
+# =============================================================================
+# Security Scan (Checkov)
+# =============================================================================
+security-scan-checkov:
+  stage: security
+  image: 
+    name: bridgecrew/checkov:latest
+    entrypoint: [""]
+  script:
+    - |
+      checkov \
+        --directory cicd/ \
+        --framework kubernetes \
+        --soft-fail \
+        --output cli \
+        --output sarif \
+        --output-file-path . || true
+  artifacts:
+    when: always
+    paths:
+      - results_sarif.sarif
+    reports:
+      sast: results_sarif.sarif
+    expire_in: 30 days
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+        - apis/**/*
+
+# =============================================================================
+# Check for Sensitive Data
+# =============================================================================
+check-sensitive-data:
+  stage: security
+  image: python:${PYTHON_VERSION}-slim
+  script:
+    - python scripts/check-sensitive-data.py cicd/
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+        - apis/**/*
+
+# =============================================================================
+# Dry Run Deployment
+# =============================================================================
+dry-run-deployment:
+  stage: validate
+  image: ubuntu:22.04
+  needs:
+    - validate-gko-crds
+    - security-scan-checkov
+  before_script:
+    - apt-get update && apt-get install -y curl
+    # Install kustomize
+    - curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz
+    - mv kustomize /usr/local/bin/
+  script:
+    - |
+      echo "=== Dry Run: Generating manifests for all environments ==="
+      for env in dev uat prod; do
+        echo ""
+        echo "=== $env environment ==="
+        kustomize build cicd/environments/$env
+      done
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+        - apis/**/*
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+
+# =============================================================================
+# MR Comment with Validation Results
+# =============================================================================
+comment-mr-validation:
+  stage: notify
+  image: alpine:latest
+  needs:
+    - validate-yaml
+    - validate-kustomize
+    - validate-gko-crds
+    - check-sensitive-data
+    - dry-run-deployment
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      COMMENT="✅ **API Definition validation passed!**
+      
+      All CRDs are valid and ready for deployment.
+      
+      | Check | Status |
+      |-------|--------|
+      | YAML Syntax | ✅ Passed |
+      | Kustomize Build | ✅ Passed |
+      | GKO CRD Validation | ✅ Passed |
+      | Sensitive Data Check | ✅ Passed |
+      | Dry Run | ✅ Passed |"
+      
+      # Post comment to MR
+      curl --request POST \
+        --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+        --header "Content-Type: application/json" \
+        --data "{\"body\": \"$COMMENT\"}" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes"
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - cicd/gko/**/*
+        - cicd/environments/**/*
+        - apis/**/*
+  when: on_success
+

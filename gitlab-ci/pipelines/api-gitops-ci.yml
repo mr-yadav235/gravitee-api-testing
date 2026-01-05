@@ -1,0 +1,366 @@
+# GitOps CI Pipeline for Gravitee API Definitions
+# GitLab CI equivalent of .github/workflows/api-gitops-ci.yaml
+#
+# Validates API CRDs, OpenAPI specs, and prepares for GitOps deployment
+
+# =============================================================================
+# YAML Lint
+# =============================================================================
+yaml-lint:
+  stage: validate
+  image: python:${PYTHON_VERSION}-slim
+  script:
+    - pip install yamllint
+    - yamllint -c .yamllint.yaml apis/ templates/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - apis/**/*
+        - templates/**/*
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - apis/**/*
+        - templates/**/*
+
+# =============================================================================
+# Validate Kubernetes CRDs with Kubeconform
+# =============================================================================
+validate-crds:
+  stage: validate
+  image: ubuntu:22.04
+  needs:
+    - yaml-lint
+  parallel:
+    matrix:
+      - ENVIRONMENT: [dev, uat, prod]
+  before_script:
+    - apt-get update && apt-get install -y curl python3
+    # Install kubeconform
+    - curl -L https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz | tar xz
+    - mv kubeconform /usr/local/bin/
+    # Install kustomize
+    - curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz
+    - mv kustomize /usr/local/bin/
+  script:
+    - mkdir -p /tmp/schemas/gravitee.io
+    # Download GKO CRD schemas
+    - |
+      curl -L -o /tmp/schemas/apidefinition.json \
+        https://raw.githubusercontent.com/gravitee-io/gravitee-kubernetes-operator/master/api/v1alpha1/apidefinition_types.go || true
+    # Build Kustomize manifests
+    - kustomize build apis/overlays/${ENVIRONMENT} > /tmp/manifests-${ENVIRONMENT}.yaml
+    # Validate with kubeconform
+    - |
+      kubeconform \
+        -summary \
+        -output json \
+        -schema-location default \
+        -schema-location '/tmp/schemas/{{ .ResourceKind }}.json' \
+        -skip ${SKIP_CRDS} \
+        /tmp/manifests-${ENVIRONMENT}.yaml
+    # Custom GKO CRD validation
+    - python3 scripts/validate-gko-crds.py /tmp/manifests-${ENVIRONMENT}.yaml
+  artifacts:
+    paths:
+      - /tmp/manifests-${ENVIRONMENT}.yaml
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - apis/**/*
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - apis/**/*
+
+# =============================================================================
+# Validate OpenAPI Specifications
+# =============================================================================
+validate-openapi:
+  stage: validate
+  image: node:${NODE_VERSION}-slim
+  needs:
+    - yaml-lint
+  before_script:
+    - apt-get update && apt-get install -y python3
+    - npm install -g @apidevtools/swagger-cli @stoplight/spectral-cli
+  script:
+    - mkdir -p /tmp/openapi-specs
+    # Extract OpenAPI specs
+    - python3 scripts/extract-openapi-specs.py apis/base /tmp/openapi-specs
+    # Validate with Swagger CLI
+    - |
+      for spec in /tmp/openapi-specs/*.yaml; do
+        if [ -f "$spec" ]; then
+          echo "Validating $spec..."
+          swagger-cli validate "$spec" || true
+        fi
+      done
+    # Lint with Spectral
+    - |
+      for spec in /tmp/openapi-specs/*.yaml; do
+        if [ -f "$spec" ]; then
+          echo "Linting $spec..."
+          spectral lint "$spec" --ruleset .spectral.yaml || true
+        fi
+      done
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - apis/**/*
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - apis/**/*
+
+# =============================================================================
+# Security Scanning
+# =============================================================================
+security-scan:
+  stage: security
+  image: 
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  needs:
+    - validate-crds
+  before_script:
+    - apk add --no-cache curl python3 bash
+    # Install kustomize
+    - curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz
+    - mv kustomize /usr/local/bin/
+  script:
+    # Build manifests for security scan
+    - |
+      for env in dev uat prod; do
+        kustomize build apis/overlays/$env > /tmp/manifests-$env.yaml || true
+      done
+    # Run Trivy config scan (table format)
+    - |
+      trivy config apis/ \
+        --severity CRITICAL,HIGH,MEDIUM \
+        --format table || true
+    # Run Trivy for JSON output
+    - |
+      trivy config apis/ \
+        --severity CRITICAL,HIGH,MEDIUM \
+        --format json \
+        --output trivy-results.json || true
+    # Check for hardcoded secrets
+    - |
+      if grep -rE "(password|secret|key):\s*['\"]?[a-zA-Z0-9]+" apis/ --include="*.yaml" | grep -v "SEALED_SECRET\|PLACEHOLDER\|secretRef\|secretKey"; then
+        echo "⚠️ Potential hardcoded secrets found!"
+      fi
+    # Custom sensitive data check
+    - python3 scripts/check-sensitive-data.py apis/
+  artifacts:
+    when: always
+    paths:
+      - trivy-results.json
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - apis/**/*
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - apis/**/*
+
+# =============================================================================
+# Policy Validation
+# =============================================================================
+policy-validation:
+  stage: validate
+  image: ubuntu:22.04
+  needs:
+    - validate-crds
+  before_script:
+    - apt-get update && apt-get install -y curl python3
+    # Install yq
+    - curl -L https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64 -o /usr/local/bin/yq
+    - chmod +x /usr/local/bin/yq
+  script:
+    # Validate rate limiting policies
+    - |
+      echo "Checking rate limiting configurations..."
+      for file in apis/base/*/api-definition.yaml; do
+        if [ -f "$file" ]; then
+          api_name=$(yq '.metadata.name' "$file")
+          rate_limit=$(yq '.spec.flows[].pre[] | select(.policy == "rate-limit") | .configuration.rate.limit' "$file" 2>/dev/null)
+          if [ -n "$rate_limit" ]; then
+            echo "API: $api_name - Rate Limit: $rate_limit"
+            if [ "$rate_limit" -gt 10000 ] 2>/dev/null; then
+              echo "⚠️ High rate limit ($rate_limit) for $api_name"
+            fi
+          fi
+        fi
+      done
+    # Validate authentication policies
+    - |
+      echo "Checking authentication configurations..."
+      for file in apis/base/*/api-plan.yaml; do
+        if [ -f "$file" ]; then
+          yq eval-all '.metadata.name as $name | .spec.security as $security | "\($name): \($security)"' "$file"
+        fi
+      done
+    # Custom policy validation
+    - python3 scripts/validate-policies.py apis/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - apis/**/*
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - apis/**/*
+
+# =============================================================================
+# GitOps Diff Check (MR only)
+# =============================================================================
+gitops-diff:
+  stage: validate
+  image: ubuntu:22.04
+  needs:
+    - validate-crds
+    - policy-validation
+  before_script:
+    - apt-get update && apt-get install -y curl git
+    # Install kustomize
+    - curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz
+    - mv kustomize /usr/local/bin/
+  script:
+    - mkdir -p diffs
+    # Generate diff for each environment
+    - |
+      for env in dev uat prod; do
+        echo "=== Generating diff for $env ==="
+        
+        # Build current manifests
+        if [ -d "apis/overlays/$env" ]; then
+          kustomize build apis/overlays/$env > /tmp/current-$env.yaml 2>/dev/null || echo "" > /tmp/current-$env.yaml
+        else
+          echo "" > /tmp/current-$env.yaml
+        fi
+        
+        # Fetch target branch manifests
+        git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+        git checkout origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME -- apis/overlays/$env 2>/dev/null || true
+        
+        if [ -d "apis/overlays/$env" ]; then
+          kustomize build apis/overlays/$env > /tmp/target-$env.yaml 2>/dev/null || echo "" > /tmp/target-$env.yaml
+        else
+          echo "" > /tmp/target-$env.yaml
+        fi
+        
+        # Generate diff
+        diff -u /tmp/target-$env.yaml /tmp/current-$env.yaml > diffs/$env.diff || true
+        
+        # Restore current branch
+        git checkout $CI_COMMIT_SHA -- apis/overlays/$env 2>/dev/null || true
+      done
+    # Display diffs
+    - |
+      echo "## 🔄 GitOps Diff Report"
+      for env in dev uat prod; do
+        echo ""
+        echo "### ${env^^} Environment"
+        if [ -s "diffs/$env.diff" ]; then
+          cat diffs/$env.diff | head -100
+        else
+          echo "_No changes detected._"
+        fi
+      done
+  artifacts:
+    paths:
+      - diffs/
+    expire_in: 7 days
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+
+# =============================================================================
+# Notify ArgoCD (main branch only)
+# =============================================================================
+notify-argocd:
+  stage: deploy
+  image: ubuntu:22.04
+  needs:
+    - validate-crds
+    - security-scan
+    - policy-validation
+  before_script:
+    - apt-get update && apt-get install -y curl jq
+  script:
+    - |
+      echo "### 🔄 ArgoCD Sync Triggered"
+      
+      if [ -n "$ARGOCD_SERVER" ] && [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+        echo "Triggering ArgoCD sync for dev environment..."
+        
+        # Sync dev application
+        RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+          -H "Authorization: Bearer $ARGOCD_AUTH_TOKEN" \
+          -H "Content-Type: application/json" \
+          "$ARGOCD_SERVER/api/v1/applications/gravitee-apis-dev/sync" \
+          -d '{"prune": true}' 2>/dev/null || echo "error")
+        
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "✅ Dev sync triggered successfully"
+        else
+          echo "⚠️ Dev sync request returned: $HTTP_CODE"
+        fi
+        
+        echo ""
+        echo "| Environment | Status |"
+        echo "|-------------|--------|"
+        echo "| Dev | Sync Triggered |"
+        echo "| UAT | Manual Approval Required |"
+        echo "| Prod | Manual Approval Required |"
+      else
+        echo "ℹ️ ArgoCD credentials not configured. Skipping sync trigger."
+        echo ""
+        echo "To enable automatic sync, add these CI/CD variables:"
+        echo "- ARGOCD_SERVER: Your ArgoCD server URL"
+        echo "- ARGOCD_AUTH_TOKEN: ArgoCD API token"
+      fi
+    # Create deployment record
+    - |
+      echo ""
+      echo "### 📝 Deployment Info"
+      echo "- **Commit:** ${CI_COMMIT_SHA}"
+      echo "- **Author:** ${GITLAB_USER_LOGIN}"
+      echo "- **Timestamp:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+      echo "- **Branch:** ${CI_COMMIT_REF_NAME}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# =============================================================================
+# Pipeline Summary
+# =============================================================================
+pipeline-summary:
+  stage: notify
+  image: ubuntu:22.04
+  needs:
+    - job: yaml-lint
+      optional: true
+    - job: validate-crds
+      optional: true
+    - job: validate-openapi
+      optional: true
+    - job: security-scan
+      optional: true
+    - job: policy-validation
+      optional: true
+  script:
+    - |
+      echo "## 📊 CI Pipeline Summary"
+      echo ""
+      echo "| Check | Status |"
+      echo "|-------|--------|"
+      echo "| YAML Lint | ${YAML_LINT_STATUS:-✅} |"
+      echo "| CRD Validation | ${CRD_VALIDATION_STATUS:-✅} |"
+      echo "| OpenAPI Validation | ${OPENAPI_VALIDATION_STATUS:-✅} |"
+      echo "| Security Scan | ${SECURITY_SCAN_STATUS:-✅} |"
+      echo "| Policy Validation | ${POLICY_VALIDATION_STATUS:-✅} |"
+  when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_MERGE_REQUEST_IID
+

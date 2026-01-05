@@ -1,0 +1,206 @@
+# Promote APIs between environments
+# GitLab CI equivalent of cicd/github-actions/promote-api.yaml
+#
+# Creates MR to promote APIs from one environment to another
+
+# =============================================================================
+# Variables for Promotion
+# =============================================================================
+variables:
+  # Override these when triggering manually
+  SOURCE_ENV: "dev"
+  TARGET_ENV: "uat"
+  API_NAME: ""
+
+# =============================================================================
+# Validate Promotion Path
+# =============================================================================
+validate-promotion:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      echo "Validating promotion path: $SOURCE_ENV → $TARGET_ENV"
+      
+      # Validate promotion path
+      if [ "$SOURCE_ENV" == "dev" ] && [ "$TARGET_ENV" == "prod" ]; then
+        echo "❌ Cannot promote directly from dev to prod. Please promote to uat first."
+        exit 1
+      fi
+      
+      if [ "$SOURCE_ENV" == "$TARGET_ENV" ]; then
+        echo "❌ Source and target environments cannot be the same."
+        exit 1
+      fi
+      
+      if [ "$SOURCE_ENV" == "uat" ] && [ "$TARGET_ENV" == "dev" ]; then
+        echo "❌ Cannot demote from uat to dev."
+        exit 1
+      fi
+      
+      if [ "$SOURCE_ENV" == "prod" ]; then
+        echo "❌ Cannot promote from prod environment."
+        exit 1
+      fi
+      
+      echo "✓ Valid promotion path: $SOURCE_ENV → $TARGET_ENV"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+
+# =============================================================================
+# Create Promotion Branch and MR
+# =============================================================================
+create-promotion-mr:
+  stage: deploy
+  image: alpine:latest
+  needs:
+    - validate-promotion
+  before_script:
+    - apk add --no-cache git curl jq
+    - git config --global user.email "gitlab-ci@example.com"
+    - git config --global user.name "GitLab CI"
+  script:
+    - |
+      TIMESTAMP=$(date +%Y%m%d%H%M%S)
+      BRANCH="promote/${SOURCE_ENV}-to-${TARGET_ENV}-${TIMESTAMP}"
+      
+      echo "Creating promotion branch: $BRANCH"
+      
+      # Clone with token for push access
+      git clone https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git repo
+      cd repo
+      
+      # Create branch
+      git checkout -b $BRANCH
+      
+      # Copy API definitions if specific API
+      if [ -n "$API_NAME" ]; then
+        echo "Promoting specific API: $API_NAME"
+        cp cicd/environments/$SOURCE_ENV/*$API_NAME*.yaml cicd/environments/$TARGET_ENV/ 2>/dev/null || true
+      else
+        echo "Promoting all APIs"
+      fi
+      
+      # Create promotion info
+      cat > cicd/environments/$TARGET_ENV/promotion-info.yaml << EOF
+      # Promotion Information
+      # This file is auto-generated during promotion
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: promotion-info
+        namespace: gravitee-apis-$TARGET_ENV
+      data:
+        promoted_from: "$SOURCE_ENV"
+        promoted_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        promoted_by: "${GITLAB_USER_LOGIN}"
+        source_commit: "${CI_COMMIT_SHA}"
+        pipeline_url: "${CI_PIPELINE_URL}"
+      EOF
+      
+      # Commit and push
+      git add .
+      git commit -m "chore: promote APIs from $SOURCE_ENV to $TARGET_ENV
+      
+      Promoted by: ${GITLAB_USER_LOGIN}
+      Source commit: ${CI_COMMIT_SHA}
+      Pipeline: ${CI_PIPELINE_URL}
+      
+      [skip ci]"
+      
+      git push origin $BRANCH
+      
+      # Create Merge Request using GitLab API
+      echo "Creating Merge Request..."
+      
+      MR_TITLE="🚀 Promote APIs: ${SOURCE_ENV} → ${TARGET_ENV}"
+      MR_DESCRIPTION="## API Promotion Request
+      
+      **Source Environment:** ${SOURCE_ENV}
+      **Target Environment:** ${TARGET_ENV}
+      **Requested by:** @${GITLAB_USER_LOGIN}
+      **API Name:** ${API_NAME:-all}
+      
+      ### Changes
+      This MR promotes API definitions from \`${SOURCE_ENV}\` to \`${TARGET_ENV}\`.
+      
+      ### Checklist
+      - [ ] API tests passed in source environment
+      - [ ] No breaking changes
+      - [ ] Documentation updated (if needed)
+      - [ ] Stakeholders notified
+      
+      ### Approval Required
+      $(if [ "$TARGET_ENV" == "prod" ]; then echo "⚠️ **Production deployment requires approval from API Admin team.**"; fi)"
+      
+      # Create MR via API
+      curl --request POST \
+        --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+        --header "Content-Type: application/json" \
+        --data "{
+          \"source_branch\": \"$BRANCH\",
+          \"target_branch\": \"main\",
+          \"title\": \"$MR_TITLE\",
+          \"description\": \"$MR_DESCRIPTION\",
+          \"remove_source_branch\": true,
+          \"labels\": \"promotion,${TARGET_ENV},automated\"
+        }" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests"
+      
+      echo ""
+      echo "✓ Promotion MR created successfully"
+  after_script:
+    # Slack notification
+    - |
+      if [ -n "$SLACK_WEBHOOK_URL" ]; then
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"text\": \"🚀 API Promotion MR Created\",
+            \"blocks\": [
+              {
+                \"type\": \"section\",
+                \"text\": {
+                  \"type\": \"mrkdwn\",
+                  \"text\": \"*API Promotion Request*\n*From:* ${SOURCE_ENV}\n*To:* ${TARGET_ENV}\n*By:* ${GITLAB_USER_LOGIN}\"
+                }
+              }
+            ]
+          }" \
+          "$SLACK_WEBHOOK_URL" || true
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+
+# =============================================================================
+# Quick Promote Jobs (Manual)
+# =============================================================================
+promote-dev-to-uat:
+  stage: deploy
+  variables:
+    SOURCE_ENV: "dev"
+    TARGET_ENV: "uat"
+  trigger:
+    include:
+      - local: gitlab-ci/pipelines/promote-api.yml
+    strategy: depend
+  when: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+promote-uat-to-prod:
+  stage: deploy
+  variables:
+    SOURCE_ENV: "uat"
+    TARGET_ENV: "prod"
+  trigger:
+    include:
+      - local: gitlab-ci/pipelines/promote-api.yml
+    strategy: depend
+  when: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+

@@ -1,0 +1,78 @@
+# GitLab CI/CD Main Pipeline Configuration
+# Equivalent to GitHub Actions workflows for Gravitee API Testing Strategy
+#
+# To use: Copy this file to your repository root as .gitlab-ci.yml
+
+include:
+  - local: 'gitlab-ci/templates/.variables.yml'
+  - local: 'gitlab-ci/templates/.base-jobs.yml'
+  - local: 'gitlab-ci/pipelines/api-gitops-ci.yml'
+    rules:
+      - if: $CI_PIPELINE_SOURCE == "push"
+        changes:
+          - apis/**/*
+          - templates/**/*
+      - if: $CI_MERGE_REQUEST_IID
+        changes:
+          - apis/**/*
+          - templates/**/*
+  - local: 'gitlab-ci/pipelines/validate-api.yml'
+    rules:
+      - if: $CI_MERGE_REQUEST_IID
+        changes:
+          - cicd/gko/**/*
+          - cicd/environments/**/*
+          - apis/**/*
+  - local: 'gitlab-ci/pipelines/deploy-api.yml'
+    rules:
+      - if: $CI_COMMIT_BRANCH == "main"
+        changes:
+          - cicd/gko/**/*
+          - cicd/environments/**/*
+      - if: $CI_COMMIT_BRANCH == "develop"
+        changes:
+          - cicd/gko/**/*
+          - cicd/environments/**/*
+  - local: 'gitlab-ci/pipelines/post-deploy-tests.yml'
+    rules:
+      - if: $RUN_POST_DEPLOY_TESTS == "true"
+      - if: $CI_PIPELINE_SOURCE == "schedule"
+      - if: $CI_PIPELINE_SOURCE == "trigger"
+
+stages:
+  - validate
+  - build
+  - security
+  - deploy
+  - test
+  - notify
+
+# Default settings
+default:
+  image: ubuntu:22.04
+  tags:
+    - docker
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+# Workflow rules
+workflow:
+  rules:
+    # Run on merge requests
+    - if: $CI_MERGE_REQUEST_IID
+    # Run on main/develop branches
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+    # Run on feature/release branches
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/.*/
+    - if: $CI_COMMIT_BRANCH =~ /^release\/.*/
+    # Run on schedules
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    # Run on manual triggers
+    - if: $CI_PIPELINE_SOURCE == "web"
+    # Run on API triggers
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+

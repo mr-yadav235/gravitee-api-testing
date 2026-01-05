@@ -1,0 +1,161 @@
+# Base Job Templates for GitLab CI/CD
+# Reusable job definitions that can be extended
+
+# =============================================================================
+# Base Images
+# =============================================================================
+.python-base:
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - pip install --upgrade pip
+
+.node-base:
+  image: node:${NODE_VERSION}-slim
+  before_script:
+    - npm config set update-notifier false
+
+.kubectl-base:
+  image: bitnami/kubectl:latest
+  before_script:
+    - kubectl version --client || true
+
+# =============================================================================
+# Install Tools
+# =============================================================================
+.install-kubeconform:
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -L https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz | tar xz
+    - mv kubeconform /usr/local/bin/
+    - kubeconform -v
+
+.install-kustomize:
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz
+    - mv kustomize /usr/local/bin/
+    - kustomize version
+
+.install-yq:
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -L https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64 -o /usr/local/bin/yq
+    - chmod +x /usr/local/bin/yq
+    - yq --version
+
+.install-argocd-cli:
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    - chmod +x argocd
+    - mv argocd /usr/local/bin/
+    - argocd version --client
+
+# =============================================================================
+# Caching
+# =============================================================================
+.npm-cache:
+  cache:
+    key: npm-${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+    policy: pull-push
+
+.pip-cache:
+  cache:
+    key: pip-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache/pip/
+    policy: pull-push
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# =============================================================================
+# Artifacts
+# =============================================================================
+.test-artifacts:
+  artifacts:
+    when: always
+    expire_in: ${ARTIFACT_EXPIRE_TIME}
+    paths:
+      - reports/
+    reports:
+      junit: reports/*.xml
+
+.security-artifacts:
+  artifacts:
+    when: always
+    expire_in: ${SECURITY_ARTIFACT_EXPIRE_TIME}
+    paths:
+      - reports/
+      - trivy-results.*
+      - zap-*
+
+.manifest-artifacts:
+  artifacts:
+    expire_in: ${ARTIFACT_EXPIRE_TIME}
+    paths:
+      - manifests/
+
+# =============================================================================
+# Environment Templates
+# =============================================================================
+.dev-environment:
+  environment:
+    name: dev
+    url: ${GATEWAY_URL_DEV}
+  variables:
+    ENVIRONMENT: "dev"
+    GATEWAY_URL: ${GATEWAY_URL_DEV}
+
+.uat-environment:
+  environment:
+    name: uat
+    url: ${GATEWAY_URL_UAT}
+  variables:
+    ENVIRONMENT: "uat"
+    GATEWAY_URL: ${GATEWAY_URL_UAT}
+
+.prod-environment:
+  environment:
+    name: prod
+    url: ${GATEWAY_URL_PROD}
+  variables:
+    ENVIRONMENT: "prod"
+    GATEWAY_URL: ${GATEWAY_URL_PROD}
+
+# =============================================================================
+# Notification Templates
+# =============================================================================
+.slack-notification:
+  script:
+    - |
+      if [ -n "$SLACK_WEBHOOK_URL" ]; then
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"$SLACK_MESSAGE\"}" \
+          "$SLACK_WEBHOOK_URL"
+      fi
+
+# =============================================================================
+# Rules Templates
+# =============================================================================
+.on-merge-request:
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      when: always
+
+.on-main-branch:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+
+.on-develop-branch:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+      when: always
+
+.manual-trigger:
+  rules:
+    - when: manual
+      allow_failure: true
+

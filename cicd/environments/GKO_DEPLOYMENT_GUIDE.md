@@ -284,6 +284,202 @@ kubectl describe apidefinition petstore-api -n gravitee-apis-dev
 
 ---
 
+## 🔄 Environment Promotion
+
+### Promotion Flow
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐
+│   DEV   │────▶│   UAT   │────▶│  PROD   │
+└─────────┘     └─────────┘     └─────────┘
+     │               │               │
+  Testing        Validation      Production
+  & Debug        & QA Sign-off    Release
+```
+
+**Valid Promotion Paths:**
+- ✅ `dev → uat` (Development to UAT)
+- ✅ `uat → prod` (UAT to Production)
+- ❌ `dev → prod` (Not allowed - must go through UAT)
+
+---
+
+### Method 1: GitHub Actions (Recommended)
+
+Trigger the **Promote API** workflow from GitHub:
+
+1. Go to **Actions** → **Promote API**
+2. Click **Run workflow**
+3. Select:
+   - **Source environment:** `dev` or `uat`
+   - **Target environment:** `uat` or `prod`
+   - **API name:** (optional, leave empty for all)
+4. Click **Run workflow**
+
+This creates a **Pull Request** with:
+- Promotion metadata
+- Required reviewers (for prod)
+- Slack notification
+
+```yaml
+# Workflow location: .github/workflows/promote-api.yaml
+on:
+  workflow_dispatch:
+    inputs:
+      source_env:
+        type: choice
+        options: [dev, uat]
+      target_env:
+        type: choice
+        options: [uat, prod]
+```
+
+---
+
+### Method 2: CLI Script (Local)
+
+```bash
+# Promote from dev to uat
+./cicd/scripts/promote-env.sh dev uat
+
+# Promote specific API
+./cicd/scripts/promote-env.sh dev uat petstore-api
+
+# Promote from uat to prod
+./cicd/scripts/promote-env.sh uat prod
+```
+
+The script:
+1. Validates the promotion path
+2. Creates promotion metadata
+3. Optionally triggers ArgoCD sync
+
+---
+
+### How Kustomize Overlays Work
+
+Each environment uses **Kustomize overlays** to customize base API definitions:
+
+```
+cicd/environments/
+├── dev/
+│   ├── kustomization.yaml    # Dev-specific configs
+│   ├── namespace.yaml
+│   └── petstore-api.yaml     # Full API definition
+├── uat/
+│   ├── kustomization.yaml    # UAT patches
+│   └── namespace.yaml
+└── prod/
+    ├── kustomization.yaml    # Prod patches
+    ├── namespace.yaml
+    └── network-policy.yaml   # Extra security
+```
+
+#### DEV Environment:
+```yaml
+# Full API definitions, debug logging
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=dev
+      - LOG_LEVEL=DEBUG
+```
+
+#### UAT Environment:
+```yaml
+# References base APIs + applies patches
+resources:
+  - ../../gko/crds/api-definition-v4.yaml
+
+patches:
+  - target:
+      kind: ApiV4Definition
+      name: petstore-api
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /uat/petstore/v3    # UAT-specific path
+      - op: replace
+        path: /spec/name
+        value: "Petstore API (UAT)"
+```
+
+#### PROD Environment:
+```yaml
+# Only secured APIs, stricter settings
+resources:
+  - ../../gko/crds/api-jwt-secured.yaml  # Only secured APIs
+
+patches:
+  # Production paths
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/listeners/0/paths/0/path
+        value: /api/petstore/v3
+      - op: replace
+        path: /spec/visibility
+        value: PRIVATE
+  
+  # Disable payload logging
+  - target:
+      kind: ApiV4Definition
+    patch: |-
+      - op: replace
+        path: /spec/analytics/logging/content/payload
+        value: false
+```
+
+---
+
+### Environment Differences Summary
+
+| Aspect | DEV | UAT | PROD |
+|--------|-----|-----|------|
+| **Path Prefix** | `/petstore-gitops/` | `/uat/petstore/` | `/api/petstore/` |
+| **Log Level** | DEBUG | INFO | WARN |
+| **Rate Limit** | 1000/min | 500/min | 100/min |
+| **Payload Logging** | ✅ Enabled | ✅ Enabled | ❌ Disabled |
+| **Network Policy** | None | None | Restricted |
+| **APIs Allowed** | All | All | Secured only |
+| **Sync Mode** | Auto | Auto | Manual approval |
+
+---
+
+### Promotion Checklist
+
+Before promoting to **UAT**:
+- [ ] All unit tests pass
+- [ ] API contract validated
+- [ ] No breaking changes
+- [ ] OpenAPI spec updated
+
+Before promoting to **PROD**:
+- [ ] UAT testing complete
+- [ ] Performance tests passed
+- [ ] Security scan clean
+- [ ] Stakeholder approval
+- [ ] Rollback plan ready
+
+---
+
+### ArgoCD Sync After Promotion
+
+```bash
+# Check application status
+argocd app list
+
+# Sync specific environment
+argocd app sync gravitee-apis-uat
+argocd app sync gravitee-apis-prod
+
+# View diff before sync
+argocd app diff gravitee-apis-prod
+```
+
+---
+
 ## 📚 References
 
 - [GKO Documentation](https://documentation.gravitee.io/gravitee-kubernetes-operator/)

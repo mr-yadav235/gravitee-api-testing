@@ -1,0 +1,18 @@
+Component	CPU Request	CPU Limit	Memory Request	Memory Limit	Replicas	Persistent Storage
+Gateway	500m	2000m	1 Gi	2 Gi	1	—
+Management API	500m	1000m	1 Gi	2 Gi	1	—
+Management UI	100m	500m	256 Mi	512 Mi	1	—
+Portal UI	100m	500m	256 Mi	512 Mi	1	—
+MongoDB	500m	1000m	1 Gi	2 Gi	1	20 Gi
+Elasticsearch	1000m	2000m	2 Gi	4 Gi	1	30 Gi
+Redis	200m	500m	256 Mi	512 Mi	1	2 Gi
+GKO (Operator)	100m	500m	128 Mi	256 Mi	1	—
+Overall Capacity Recommendation
+
+Total CPU: ~3 vCPU
+
+Total Memory: ~6 GiB RAM
+
+Total Persistent Storage: ~50 GiB
+
+Deployment Type: Single-replica, non-HA (suitable for Dev / PoC / Low-load environments)

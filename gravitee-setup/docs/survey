@@ -1,0 +1,247 @@
+📋 Enterprise API Gateway Architecture Survey
+Section 0: Respondent Context (Required)
+
+Purpose: Understand workload and criticality
+
+Business Unit / Application Name
+(Short text)
+
+Environment(s) used
+☐ Dev ☐ Test ☐ UAT ☐ Pre-Prod ☐ Prod
+
+API exposure type
+☐ Internal ☐ Partner ☐ Public ☐ Mixed
+
+Criticality of APIs
+☐ Low ☐ Medium ☐ High ☐ Mission-Critical
+
+🔐 Section 1: Security Requirements
+
+Purpose: Define baseline and advanced security controls
+
+Which security controls are mandatory for your APIs?
+☐ TLS 1.2+
+☐ mTLS
+☐ IP Whitelisting
+☐ WAF Integration
+☐ Payload Encryption
+☐ Request / Response Validation
+☐ API Key Protection
+
+Do your APIs require protection against OWASP API Top 10 threats?
+☐ Yes ☐ No ☐ Not Sure
+
+Are sensitive data elements exposed via APIs?
+☐ PII
+☐ PCI
+☐ Financial data
+☐ None
+
+Do you require security policy enforcement at the Gateway layer?
+☐ Mandatory
+☐ Optional
+☐ Application-level only
+
+🔑 Section 2: Authentication & Authorization
+
+Purpose: Understand identity, token, and access patterns
+
+Authentication mechanisms required (select all):
+☐ OAuth 2.0
+☐ OpenID Connect
+☐ JWT
+☐ API Key
+☐ mTLS
+☐ SAML
+
+Token issuer(s) used today:
+☐ Enterprise IAM
+☐ External IdP
+☐ Custom / In-house
+☐ Not defined
+
+Authorization model required:
+☐ Role-based (RBAC)
+☐ Attribute-based (ABAC)
+☐ Scope-based
+☐ Backend-managed
+
+Do you need token transformation or enrichment at the gateway?
+☐ Yes ☐ No
+
+🚦 Section 3: Traffic Management & Performance
+
+Purpose: Capacity planning and traffic control
+
+Expected peak API traffic (per API):
+☐ < 100 RPS
+☐ 100–500 RPS
+☐ 500–2K RPS
+☐ > 2K RPS
+
+Do you require rate limiting / throttling?
+☐ Per Consumer
+☐ Per API
+☐ Per IP
+☐ Not required
+
+Do you need spike arrest / burst control?
+☐ Yes ☐ No
+
+Latency expectation (P95):
+☐ < 50 ms
+☐ 50–100 ms
+☐ 100–300 ms
+☐ > 300 ms
+
+Do you require caching at the gateway?
+☐ Response Cache
+☐ Token Cache
+☐ Not required
+
+🔗 Section 4: Integration & Architecture Patterns
+
+Purpose: Platform compatibility and backend design
+
+Backend systems exposed via APIs:
+☐ Microservices
+☐ Legacy / Monolith
+☐ ESB / Middleware
+☐ SaaS / External APIs
+
+Communication protocols used:
+☐ REST
+☐ GraphQL
+☐ gRPC
+☐ WebSockets
+
+Do you require protocol transformation?
+☐ REST ↔ SOAP
+☐ REST ↔ gRPC
+☐ JSON ↔ XML
+☐ No
+
+Deployment model preferred:
+☐ Kubernetes
+☐ VM / Bare Metal
+☐ Hybrid
+
+Do you need multi-region or DR support?
+☐ Active-Active
+☐ Active-Passive
+☐ Single region
+
+📜 Section 5: Governance, Compliance & Operations
+
+Purpose: Enterprise control and standardization
+
+Are your APIs subject to regulatory compliance?
+☐ PCI-DSS
+☐ GDPR
+☐ SOX
+☐ RBI
+☐ None
+
+Do you require centralized API governance?
+☐ Mandatory standards
+☐ Guidelines only
+☐ Team-specific
+
+API lifecycle management required:
+☐ Design review
+☐ Versioning
+☐ Deprecation policies
+☐ Consumer communication
+
+Observability requirements:
+☐ Metrics
+☐ Logs
+☐ Distributed Tracing
+☐ Alerts
+
+CI/CD & Automation expectations:
+☐ GitOps
+☐ OpenAPI-driven deployments
+☐ Policy as Code
+☐ Manual only
+
+Section 6: Monitoring, Observability & Operations (Dedicated)
+
+Purpose: Ensure runtime visibility, SRE readiness, and operational excellence
+
+🔍 API Metrics
+
+Which API metrics are mandatory?
+☐ Request count / TPS
+☐ Error rate (4xx / 5xx)
+☐ Latency (P50 / P95 / P99)
+☐ Consumer-level metrics
+☐ Backend response time
+
+📜 Logging
+
+What level of logging is required?
+☐ Access logs
+☐ Error logs
+☐ Security / audit logs
+☐ Full request/response logging (masked)
+
+Log retention requirements:
+☐ < 7 days
+☐ 7–30 days
+☐ 30–90 days
+☐ > 90 days
+
+Log destination (select all):
+☐ ELK / OpenSearch
+☐ Splunk
+☐ Cloud-native logging
+☐ SIEM
+
+🔗 Distributed Tracing
+
+Is distributed tracing required?
+☐ Yes (mandatory)
+☐ Optional
+☐ Not required
+
+Tracing standards supported:
+☐ OpenTelemetry
+☐ Zipkin
+☐ Jaeger
+
+🚨 Alerting & Incident Management
+
+Alerting requirements:
+☐ Latency threshold breach
+☐ Error rate spike
+☐ Traffic anomalies
+☐ Backend downtime
+
+Alert delivery channels:
+☐ Email
+☐ PagerDuty
+☐ OpsGenie
+☐ Slack / MS Teams
+
+📈 Dashboards & Reporting
+
+Dashboard expectations:
+☐ Real-time dashboards
+☐ Consumer-wise usage
+☐ SLA / SLO reporting
+☐ Historical trend analysis
+
+Who should access monitoring dashboards?
+☐ Platform team
+☐ App teams
+☐ Security / Compliance
+☐ Management
+
+🛠️ Operational Controls
+
+Do you require runtime controls via the gateway?
+☐ Enable/disable APIs
+☐ Dynamic rate-limit change
+☐ Canary / traffic splitting
+☐ Emergency kill switch

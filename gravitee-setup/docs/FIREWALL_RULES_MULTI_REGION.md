@@ -45,38 +45,41 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │                                                                                          │
 │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐     │
 │   │  US REGION  │    │  EU REGION  │    │ ASIA REGION │    │        JSZ          │     │
-│   │             │    │             │    │             │    │     (Isolated)      │     │
+│   │             │    │             │    │             │    │   (Japan Only)      │     │
 │   │ ┌─────────┐ │    │ ┌─────────┐ │    │ ┌─────────┐ │    │ ┌─────────────────┐ │     │
 │   │ │Outer DMZ│ │    │ │Outer DMZ│ │    │ │Outer DMZ│ │    │ │  Outer DMZ      │ │     │
-│   │ └────┬────┘ │    │ └────┬────┘ │    │ └────┬────┘ │    │ │  (Japan Only)   │ │     │
+│   │ └────┬────┘ │    │ └────┬────┘ │    │ └────┬────┘ │    │ │  (Japan IPs)    │ │     │
 │   │      │      │    │      │      │    │      │      │    │ └────────┬────────┘ │     │
 │   │ ┌────▼────┐ │    │ ┌────▼────┐ │    │ ┌────▼────┐ │    │          │          │     │
 │   │ │Inner DMZ│ │    │ │Inner DMZ│ │    │ │Inner DMZ│ │    │ ┌────────▼────────┐ │     │
 │   │ │(Gateway)│ │    │ │(Gateway)│ │    │ │(Gateway)│ │    │ │   Inner DMZ     │ │     │
-│   │ └────┬────┘ │    │ └────┬────┘ │    │ └────┬────┘ │    │ │ (Isolated GW)   │ │     │
+│   │ └────┬────┘ │    │ └────┬────┘ │    │ └────┬────┘ │    │ │  (JSZ Gateway)  │ │     │
 │   │      │      │    │      │      │    │      │      │    │ └────────┬────────┘ │     │
 │   │ ┌────▼────┐ │    │ ┌────▼────┐ │    │ ┌────▼────┐ │    │          │          │     │
 │   │ │App Zone │ │    │ │App Zone │ │    │ │App Zone │ │    │ ┌────────▼────────┐ │     │
-│   │ │(Backend)│ │    │ │(Backend)│ │    │ │(Backend)│ │    │ │  Local Data     │ │     │
-│   │ └────┬────┘ │    │ └────┬────┘ │    │ └────┬────┘ │    │ │  (MongoDB/ES)   │ │     │
+│   │ │(Backend)│ │    │ │(Backend)│ │    │ │(Backend)│ │    │ │  App Zone       │ │     │
+│   │ └────┬────┘ │    │ └────┬────┘ │    │ └────┬────┘ │    │ │  (JP Backends)  │ │     │
 │   │      │      │    │      │      │    │      │      │    │ └────────┬────────┘ │     │
-│   └──────┼──────┘    └──────┼──────┘    └──────┼──────┘    │          │          │     │
-│          │                  │                  │           │ ┌────────▼────────┐ │     │
-│          │                  │                  │           │ │  Config Gateway │ │     │
-│          │                  │                  │           │ │  (One-Way)      │ │     │
-│          │                  │                  │           │ └────────┬────────┘ │     │
-│          │                  │                  │           └──────────┼──────────┘     │
+│   └──────┼──────┘    └──────┼──────┘    └──────┼──────┘    └──────────┼──────────┘     │
+│          │                  │                  │                      │                │
+│          │                  │                  │                      │                │
 │          │                  │                  │                      │                │
 │          └──────────────────┼──────────────────┴──────────────────────┘                │
 │                             │                                                          │
 │                             ▼                                                          │
-│                    ┌─────────────────┐                                                 │
-│                    │                 │                                                 │
-│                    │   CORE ZONE     │                                                 │
-│                    │   (Control      │                                                 │
-│                    │    Plane)       │                                                 │
-│                    │                 │                                                 │
-│                    └─────────────────┘                                                 │
+│          ┌───────────────────────────────────────────────────┐                        │
+│          │                                                    │                        │
+│          │                    CORE ZONE                       │                        │
+│          │              (Control Plane + Data)                │                        │
+│          │                                                    │                        │
+│          │    ┌──────────────┐        ┌──────────────┐       │                        │
+│          │    │   MongoDB    │        │Elasticsearch │       │                        │
+│          │    │   (Shared)   │        │   (Shared)   │       │                        │
+│          │    └──────────────┘        └──────────────┘       │                        │
+│          │                                                    │                        │
+│          └───────────────────────────────────────────────────┘                        │
+│                                                                                          │
+│   Note: ALL regions (US, EU, ASIA, JSZ) connect to Core Zone MongoDB & Elasticsearch   │
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1019,23 +1022,23 @@ iptables -A OUTPUT -o lo -j ACCEPT
 # Allow established connections
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# Allow to JSZ App Zone (Backend services)
+# Allow to JSZ App Zone (Japan Backend services)
 iptables -A OUTPUT -p tcp --dport 80 -d 10.4.2.0/24 -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 443 -d 10.4.2.0/24 -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 8080 -d 10.4.2.0/24 -j ACCEPT
 
-# Allow to JSZ MongoDB ONLY
-iptables -A OUTPUT -p tcp --dport 27017 -d 10.4.10.0/28 -j ACCEPT
+# Allow to Core Zone MongoDB
+iptables -A OUTPUT -p tcp --dport 27017 -d 10.0.10.0/24 -j ACCEPT
 
-# Allow to JSZ Elasticsearch ONLY
-iptables -A OUTPUT -p tcp --dport 9200 -d 10.4.20.0/28 -j ACCEPT
+# Allow to Core Zone Elasticsearch
+iptables -A OUTPUT -p tcp --dport 443 -d 10.0.20.0/24 -j ACCEPT
 
-# Allow to JSZ DNS ONLY
-iptables -A OUTPUT -p udp --dport 53 -d 10.4.5.0/28 -j ACCEPT
-iptables -A OUTPUT -p tcp --dport 53 -d 10.4.5.0/28 -j ACCEPT
+# Allow DNS resolution
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
 
-# Allow to JSZ NTP ONLY
-iptables -A OUTPUT -p udp --dport 123 -d 10.4.6.0/28 -j ACCEPT
+# Allow NTP
+iptables -A OUTPUT -p udp --dport 123 -j ACCEPT
 
 # ============================================
 # EXPLICIT BLOCKS

@@ -714,7 +714,7 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │  │   │   • gravitee-health-* (Gateway health)                                      │ │  │
 │  │   │   • gravitee-monitor-* (System monitoring)                                  │ │  │
 │  │   │                                                                              │ │  │
-│  │   │   Note: JSZ analytics stored locally only                                   │ │  │
+│  │   │   Note: All regions including JSZ send analytics here                       │ │  │
 │  │   │                                                                              │ │  │
 │  │   └─────────────────────────────────────────────────────────────────────────────┘ │  │
 │  │                                                                                    │  │
@@ -1470,20 +1470,13 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │  ┌───────────┬──────────┬────────────────┬──────────────────┬───────────────────────┐   │
 │  │   Rule    │   Port   │    Protocol    │   Destination    │       Purpose         │   │
 │  ├───────────┼──────────┼────────────────┼──────────────────┼───────────────────────┤   │
-│  │  JSZ-O-1  │  80/443  │  TCP/HTTP(S)   │  JSZ App Zone    │ Local Backend Only    │   │
-│  │  JSZ-O-2  │  27017   │    TCP/TLS     │  JSZ MongoDB     │ Local MongoDB Only    │   │
-│  │  JSZ-O-3  │  9200    │   TCP/HTTPS    │  JSZ ES Cluster  │ Local ES Only         │   │
-│  │  JSZ-O-4  │    53    │    UDP/TCP     │  JSZ DNS Only    │ Local DNS Only        │   │
-│  │  JSZ-O-5  │   123    │      UDP       │  JSZ NTP Only    │ Local NTP Only        │   │
+│  │  JSZ-O-1  │  80/443  │  TCP/HTTP(S)   │  JSZ App Zone    │ Japan Backends        │   │
+│  │  JSZ-O-2  │  27017   │    TCP/TLS     │  Core Zone       │ Core Zone MongoDB     │   │
+│  │  JSZ-O-3  │   443    │   TCP/HTTPS    │  Core Zone       │ Core Zone ES          │   │
+│  │  JSZ-O-4  │    53    │    UDP/TCP     │  DNS Servers     │ DNS Resolution        │   │
+│  │  JSZ-O-5  │   123    │      UDP       │  NTP Servers     │ Time Sync             │   │
 │  │  JSZ-O-6  │   ALL    │      ALL       │  Internet        │ ❌ BLOCKED            │   │
-│  └───────────┴──────────┴────────────────┴──────────────────┴───────────────────────┘   │
-│                                                                                          │
-│  JSZ CONFIG GATEWAY - SPECIAL RULES:                                                    │
-│  ┌───────────┬──────────┬────────────────┬──────────────────┬───────────────────────┐   │
-│  │   Rule    │   Port   │    Protocol    │   Direction      │       Purpose         │   │
-│  ├───────────┼──────────┼────────────────┼──────────────────┼───────────────────────┤   │
-│  │  CFG-1    │   443    │   TCP/HTTPS    │  INBOUND Only    │ Config Import         │   │
-│  │  CFG-2    │   ALL    │      ALL       │  OUTBOUND        │ ❌ BLOCKED (No Export)│   │
+│  │  JSZ-O-7  │   ALL    │      ALL       │  US/EU/ASIA      │ ❌ BLOCKED            │   │
 │  └───────────┴──────────┴────────────────┴──────────────────┴───────────────────────┘   │
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
@@ -1537,11 +1530,11 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 | | OUT | 80/443 | HTTP/S | App Zone | Backend |
 | **JSZ Outer DMZ** | IN | 443 | HTTPS | Japan IPs | API Traffic |
 | **JSZ Inner DMZ** | IN | 8082 | HTTP | JSZ Outer | From LB |
-| | OUT | 27017 | TLS | JSZ MongoDB | Local DB |
-| | OUT | 9200 | HTTPS | JSZ ES | Local ES |
+| | OUT | 27017 | TLS | Core Zone | Core MongoDB |
+| | OUT | 443 | HTTPS | Core Zone | Core ES |
+| | OUT | 80/443 | HTTP/S | JSZ App Zone | JP Backends |
 | | OUT | * | * | Internet | **BLOCKED** |
-| **JSZ Config GW** | IN | 443 | HTTPS | Core Zone | Config Import |
-| | OUT | * | * | * | **BLOCKED** |
+| | OUT | * | * | US/EU/ASIA | **BLOCKED** |
 | **Core Zone** | IN | 443 | HTTPS | Admin/Dev | Console/Portal |
 | | IN | 27017 | TLS | All GW | MongoDB |
 | | IN | 443 | HTTPS | All GW | Elasticsearch |
@@ -1635,9 +1628,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 | API Gateway | US/EU/ASIA | 30 sec | 0 | Active-Active, auto-failover |
 | API Gateway | JSZ | 15 min | 0 | Active-Passive, manual |
 | MongoDB | Core Zone | 60 sec | < 1 sec | Atlas automatic failover |
-| MongoDB | JSZ | 5 min | < 1 sec | Replica set, manual |
 | Elasticsearch | Core Zone | 2 min | < 1 min | Cluster auto-recovery |
-| Elasticsearch | JSZ | 10 min | < 1 min | Local cluster |
 | Management API | Core Zone | 2 min | 0 | K8s auto-restart |
 | Console/Portal | Core Zone | 2 min | N/A | K8s auto-restart |
 
@@ -1790,7 +1781,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 | US | api-us.company.com | console.company.com | portal.company.com |
 | EU | api-eu.company.com | console.company.com | portal.company.com |
 | ASIA | api-asia.company.com | console.company.com | portal.company.com |
-| JSZ | api-jsz.company.co.jp | N/A (Local only) | N/A (Local only) |
+| JSZ | api-jsz.company.co.jp | console.company.com | portal.company.com |
 
 ### Emergency Contacts
 

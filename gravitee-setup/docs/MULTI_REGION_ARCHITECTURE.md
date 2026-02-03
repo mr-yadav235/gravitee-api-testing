@@ -71,6 +71,7 @@ This document describes the enterprise multi-region deployment architecture for 
 ## 2. Global Architecture Overview
 
 ### 2.1 High-Level Multi-Region Architecture
+<img width="200" height="150" alt="image" src="https://github.com/user-attachments/assets/93ce2134-c740-4573-8108-26d4448b94fc" />
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐

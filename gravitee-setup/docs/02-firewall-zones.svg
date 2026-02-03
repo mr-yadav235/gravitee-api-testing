@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 700">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:0.1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:0.1" />
+    </linearGradient>
+    <linearGradient id="outerDmzGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ee5a5a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="innerDmzGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#feca57;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff9f43;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="appZoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#48dbfb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0abde3;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="coreZoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#5f27cd;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#341f97;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="jszOuterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#c0392b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#96281b;stop-opacity:1" />
+    </linearGradient>
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1100" height="700" fill="url(#bgGrad)"/>
+  <rect width="1100" height="700" fill="#f5f6fa"/>
+  
+  <!-- Title -->
+  <text x="550" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#2c3e50">Firewall Zones Overview</text>
+  
+  <!-- US Region -->
+  <g transform="translate(30, 60)">
+    <rect width="200" height="360" rx="10" fill="#fff" stroke="#3498db" stroke-width="3" filter="url(#dropShadow)"/>
+    <rect width="200" height="35" rx="10" fill="#3498db"/>
+    <text x="100" y="24" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">US REGION</text>
+    
+    <!-- Outer DMZ -->
+    <rect x="15" y="50" width="170" height="60" rx="5" fill="url(#outerDmzGrad)"/>
+    <text x="100" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">OUTER DMZ</text>
+    <text x="100" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">WAF • LB • DDoS</text>
+    
+    <!-- Inner DMZ -->
+    <rect x="15" y="125" width="170" height="60" rx="5" fill="url(#innerDmzGrad)"/>
+    <text x="100" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">INNER DMZ</text>
+    <text x="100" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">API Gateway Cluster</text>
+    
+    <!-- App Zone -->
+    <rect x="15" y="200" width="170" height="60" rx="5" fill="url(#appZoneGrad)"/>
+    <text x="100" y="225" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">APP ZONE</text>
+    <text x="100" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Backend Services</text>
+    
+    <!-- Arrows -->
+    <line x1="100" y1="110" x2="100" y2="125" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="100" y1="185" x2="100" y2="200" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    
+    <!-- To Core -->
+    <text x="100" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#555">↓ To Core Zone</text>
+    <text x="100" y="305" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#777">MongoDB • ES</text>
+  </g>
+  
+  <!-- EU Region -->
+  <g transform="translate(250, 60)">
+    <rect width="200" height="360" rx="10" fill="#fff" stroke="#2ecc71" stroke-width="3" filter="url(#dropShadow)"/>
+    <rect width="200" height="35" rx="10" fill="#2ecc71"/>
+    <text x="100" y="24" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">EU REGION</text>
+    
+    <rect x="15" y="50" width="170" height="60" rx="5" fill="url(#outerDmzGrad)"/>
+    <text x="100" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">OUTER DMZ</text>
+    <text x="100" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">WAF • LB • DDoS</text>
+    
+    <rect x="15" y="125" width="170" height="60" rx="5" fill="url(#innerDmzGrad)"/>
+    <text x="100" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">INNER DMZ</text>
+    <text x="100" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">API Gateway Cluster</text>
+    
+    <rect x="15" y="200" width="170" height="60" rx="5" fill="url(#appZoneGrad)"/>
+    <text x="100" y="225" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">APP ZONE</text>
+    <text x="100" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Backend Services</text>
+    
+    <line x1="100" y1="110" x2="100" y2="125" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="100" y1="185" x2="100" y2="200" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    
+    <text x="100" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#555">↓ To Core Zone</text>
+    <text x="100" y="305" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#777">MongoDB • ES</text>
+  </g>
+  
+  <!-- ASIA Region -->
+  <g transform="translate(470, 60)">
+    <rect width="200" height="360" rx="10" fill="#fff" stroke="#9b59b6" stroke-width="3" filter="url(#dropShadow)"/>
+    <rect width="200" height="35" rx="10" fill="#9b59b6"/>
+    <text x="100" y="24" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">ASIA REGION</text>
+    
+    <rect x="15" y="50" width="170" height="60" rx="5" fill="url(#outerDmzGrad)"/>
+    <text x="100" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">OUTER DMZ</text>
+    <text x="100" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">WAF • LB • DDoS</text>
+    
+    <rect x="15" y="125" width="170" height="60" rx="5" fill="url(#innerDmzGrad)"/>
+    <text x="100" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">INNER DMZ</text>
+    <text x="100" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">API Gateway Cluster</text>
+    
+    <rect x="15" y="200" width="170" height="60" rx="5" fill="url(#appZoneGrad)"/>
+    <text x="100" y="225" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">APP ZONE</text>
+    <text x="100" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Backend Services</text>
+    
+    <line x1="100" y1="110" x2="100" y2="125" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="100" y1="185" x2="100" y2="200" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    
+    <text x="100" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#555">↓ To Core Zone</text>
+    <text x="100" y="305" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#777">MongoDB • ES</text>
+  </g>
+  
+  <!-- JSZ Region -->
+  <g transform="translate(690, 60)">
+    <rect width="240" height="360" rx="10" fill="#fff" stroke="#e74c3c" stroke-width="3" filter="url(#dropShadow)"/>
+    <rect width="240" height="35" rx="10" fill="#e74c3c"/>
+    <text x="120" y="24" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">JSZ (Japan Only)</text>
+    
+    <rect x="15" y="50" width="210" height="60" rx="5" fill="url(#jszOuterGrad)"/>
+    <text x="120" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">OUTER DMZ</text>
+    <text x="120" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Japan IPs • Geo-Lock</text>
+    
+    <rect x="15" y="125" width="210" height="60" rx="5" fill="url(#innerDmzGrad)"/>
+    <text x="120" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">INNER DMZ</text>
+    <text x="120" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">JSZ Gateway Cluster</text>
+    
+    <rect x="15" y="200" width="210" height="60" rx="5" fill="url(#appZoneGrad)"/>
+    <text x="120" y="225" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">APP ZONE</text>
+    <text x="120" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Japan Backends</text>
+    
+    <line x1="120" y1="110" x2="120" y2="125" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="120" y1="185" x2="120" y2="200" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+    
+    <text x="120" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#555">↓ To Core Zone</text>
+    <text x="120" y="305" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#777">MongoDB • ES</text>
+    
+    <!-- Blocked indicators -->
+    <rect x="15" y="320" width="210" height="30" rx="3" fill="#2c3e50"/>
+    <text x="120" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#e74c3c">❌ No Internet • No US/EU/ASIA</text>
+  </g>
+  
+  <!-- Core Zone -->
+  <g transform="translate(50, 460)">
+    <rect width="1000" height="200" rx="15" fill="url(#coreZoneGrad)" filter="url(#dropShadow)"/>
+    <text x="500" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">CORE ZONE (Control Plane + Shared Data)</text>
+    
+    <!-- Components -->
+    <rect x="30" y="55" width="150" height="50" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="105" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white">Management API</text>
+    
+    <rect x="200" y="55" width="150" height="50" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="275" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white">Console UI</text>
+    
+    <rect x="370" y="55" width="150" height="50" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="445" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white">Developer Portal</text>
+    
+    <rect x="540" y="55" width="150" height="50" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="615" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white">Internal Gateway</text>
+    
+    <!-- Data Stores -->
+    <rect x="720" y="45" width="250" height="70" rx="8" fill="rgba(255,255,255,0.15)"/>
+    <rect x="740" y="60" width="100" height="40" rx="5" fill="#4db33d"/>
+    <text x="790" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">MongoDB</text>
+    <rect x="855" y="60" width="100" height="40" rx="5" fill="#f9b110"/>
+    <text x="905" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">Elasticsearch</text>
+    
+    <!-- Note -->
+    <rect x="30" y="130" width="940" height="50" rx="5" fill="rgba(255,255,255,0.1)"/>
+    <text x="500" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">✓ All regions (US, EU, ASIA, JSZ) connect to Core Zone MongoDB &amp; Elasticsearch</text>
+    <text x="500" y="172" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">Config Sync • Rate Limiting • Analytics • API Definitions</text>
+  </g>
+  
+  <!-- Connection Lines to Core -->
+  <path d="M 130 420 Q 130 440 200 460" stroke="#3498db" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  <path d="M 350 420 Q 350 440 400 460" stroke="#2ecc71" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  <path d="M 570 420 Q 570 440 550 460" stroke="#9b59b6" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  <path d="M 810 420 Q 810 440 750 460" stroke="#e74c3c" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  
+  <!-- Legend -->
+  <g transform="translate(50, 675)">
+    <rect x="0" y="-5" width="1000" height="25" rx="5" fill="#ecf0f1"/>
+    <rect x="20" y="0" width="12" height="12" fill="#ff6b6b"/>
+    <text x="38" y="10" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">Outer DMZ</text>
+    <rect x="130" y="0" width="12" height="12" fill="#feca57"/>
+    <text x="148" y="10" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">Inner DMZ</text>
+    <rect x="240" y="0" width="12" height="12" fill="#48dbfb"/>
+    <text x="258" y="10" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">App Zone</text>
+    <rect x="340" y="0" width="12" height="12" fill="#5f27cd"/>
+    <text x="358" y="10" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">Core Zone</text>
+    <rect x="450" y="0" width="12" height="12" fill="#4db33d"/>
+    <text x="468" y="10" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">MongoDB</text>
+    <rect x="550" y="0" width="12" height="12" fill="#f9b110"/>
+    <text x="568" y="10" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">Elasticsearch</text>
+  </g>
+</svg>
+

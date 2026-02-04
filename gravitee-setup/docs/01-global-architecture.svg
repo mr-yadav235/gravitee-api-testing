@@ -149,7 +149,7 @@
   
   <!-- JSZ Region -->
   <g transform="translate(810, 240)">
-    <rect width="280" height="280" rx="10" fill="url(#jszGrad)" filter="url(#shadow)"/>
+    <rect width="280" height="310" rx="10" fill="url(#jszGrad)" filter="url(#shadow)"/>
     <text x="140" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">JAPAN SECURE ZONE (JSZ)</text>
     
     <rect x="15" y="40" width="250" height="50" rx="5" fill="rgba(255,255,255,0.2)"/>
@@ -165,11 +165,20 @@
     <rect x="180" y="130" width="60" height="30" rx="3" fill="url(#gatewayGrad)"/>
     <text x="210" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">GW</text>
     
-    <rect x="15" y="180" width="250" height="50" rx="5" fill="rgba(255,255,255,0.2)"/>
-    <text x="140" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white">APP ZONE (Japan Backends)</text>
-    <text x="140" y="218" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.8)">Internal Services Only</text>
+    <rect x="15" y="180" width="250" height="80" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="140" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white">APP ZONE</text>
     
-    <text x="140" y="260" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">↓ Core Zone (DB/ES)</text>
+    <!-- Internal API Gateway -->
+    <rect x="30" y="210" width="100" height="40" rx="3" fill="#e74c3c"/>
+    <text x="80" y="227" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" fill="white">Internal API</text>
+    <text x="80" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" fill="white">Gateway</text>
+    
+    <!-- Backend Services -->
+    <rect x="145" y="210" width="100" height="35" rx="3" fill="rgba(255,255,255,0.3)"/>
+    <text x="195" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">Backend</text>
+    <text x="195" y="240" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">Services</text>
+    
+    <text x="140" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">↓ Core Zone (DB/ES)</text>
   </g>
   
   <!-- Connection lines from GSLB to regions -->
@@ -211,10 +220,10 @@
     <rect x="540" y="50" width="340" height="200" rx="10" fill="rgba(255,255,255,0.2)"/>
     <text x="710" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">SHARED DATA STORES</text>
     
-    <!-- MongoDB -->
+    <!-- MySQL -->
     <rect x="560" y="90" width="140" height="70" rx="5" fill="#4db33d"/>
-    <text x="630" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">MongoDB</text>
-    <text x="630" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Atlas (Shared)</text>
+    <text x="630" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">MySQL</text>
+    <text x="630" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Database (Shared)</text>
     
     <!-- Elasticsearch -->
     <rect x="720" y="90" width="140" height="70" rx="5" fill="#f9b110"/>

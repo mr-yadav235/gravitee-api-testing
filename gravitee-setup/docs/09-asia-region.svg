@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 650">
+  <defs>
+    <linearGradient id="asiaRegionGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#9b59b6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8e44ad;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="outerDmzGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e74c3c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c0392b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="innerDmzGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#feca57;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff9f43;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="appZoneGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#48dbfb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0abde3;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="gatewayGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1abc9c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16a085;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow6" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.25"/>
+    </filter>
+    <marker id="arrow6" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="650" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#8e44ad">ASIA Region Architecture</text>
+  <text x="400" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#7f8c8d">On-Premise Data Centers</text>
+  
+  <!-- Outer DMZ -->
+  <g transform="translate(50, 70)">
+    <rect width="700" height="140" rx="10" fill="url(#outerDmzGrad2)" filter="url(#shadow6)"/>
+    <text x="350" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">OUTER DMZ (Public Subnet)</text>
+    
+    <!-- Edge Security Layer -->
+    <rect x="20" y="40" width="660" height="85" rx="5" fill="rgba(255,255,255,0.15)"/>
+    <text x="350" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">EDGE SECURITY LAYER</text>
+    
+    <!-- Security Components -->
+    <rect x="40" y="75" width="130" height="40" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="105" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">WAF</text>
+    
+    <rect x="190" y="75" width="130" height="40" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="255" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">DDoS Protection</text>
+    
+    <rect x="340" y="75" width="130" height="40" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="405" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">IDS/IPS</text>
+    
+    <rect x="490" y="75" width="130" height="40" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="555" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">SSL Termination</text>
+    
+    <!-- Load Balancer -->
+    <rect x="250" y="120" width="200" height="15" rx="3" fill="rgba(255,255,255,0.3)"/>
+    <text x="350" y="132" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">Load Balancer</text>
+  </g>
+  
+  <!-- Arrow -->
+  <line x1="400" y1="210" x2="400" y2="230" stroke="#555" stroke-width="3" marker-end="url(#arrow6)"/>
+  <text x="420" y="225" font-family="Arial, sans-serif" font-size="9" fill="#555">Port 443 (HTTPS)</text>
+  
+  <!-- Inner DMZ -->
+  <g transform="translate(50, 240)">
+    <rect width="700" height="220" rx="10" fill="url(#innerDmzGrad2)" filter="url(#shadow6)"/>
+    <text x="350" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2c3e50">INNER DMZ (Private Subnet)</text>
+    
+    <!-- API Gateway Cluster -->
+    <rect x="20" y="40" width="660" height="120" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="350" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2c3e50">API GATEWAY CLUSTER</text>
+    
+    <!-- Gateway Instances -->
+    <rect x="50" y="75" width="180" height="75" rx="5" fill="url(#gatewayGrad3)"/>
+    <text x="140" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">Gateway #1</text>
+    <text x="140" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">(Active)</text>
+    <text x="140" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">Data Center A</text>
+    <text x="140" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">Port: 8082</text>
+    
+    <rect x="260" y="75" width="180" height="75" rx="5" fill="url(#gatewayGrad3)"/>
+    <text x="350" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">Gateway #2</text>
+    <text x="350" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">(Active)</text>
+    <text x="350" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">Data Center B</text>
+    <text x="350" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">Port: 8082</text>
+    
+    <rect x="470" y="75" width="180" height="75" rx="5" fill="url(#gatewayGrad3)"/>
+    <text x="560" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">Gateway #3</text>
+    <text x="560" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">(Active)</text>
+    <text x="560" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">Data Center C</text>
+    <text x="560" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.9)">Port: 8082</text>
+    
+    <!-- Internal LB -->
+    <rect x="250" y="165" width="200" height="30" rx="3" fill="rgba(255,255,255,0.3)"/>
+    <text x="350" y="185" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#2c3e50">Internal LB (Backend)</text>
+  </g>
+  
+  <!-- Arrow to Backend -->
+  <line x1="400" y1="460" x2="400" y2="480" stroke="#555" stroke-width="2" marker-end="url(#arrow6)"/>
+  
+  <!-- Backend Services -->
+  <g transform="translate(50, 490)">
+    <rect width="700" height="100" rx="10" fill="url(#appZoneGrad2)" filter="url(#shadow6)"/>
+    <text x="350" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">BACKEND SERVICES</text>
+    
+    <rect x="100" y="40" width="150" height="45" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="175" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">Service A</text>
+    <text x="175" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(Kubernetes)</text>
+    
+    <rect x="275" y="40" width="150" height="45" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="350" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">Service B</text>
+    <text x="350" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(Container)</text>
+    
+    <rect x="450" y="40" width="150" height="45" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="525" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">Service C</text>
+    <text x="525" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(VM)</text>
+  </g>
+  
+  <!-- Sync to Core Zone -->
+  <path d="M 400 590 Q 400 610 400 620" stroke="#9b59b6" stroke-width="3" fill="none" stroke-dasharray="5,3" marker-end="url(#arrow6)"/>
+  <text x="420" y="610" font-family="Arial, sans-serif" font-size="9" fill="#9b59b6">Sync to Core Zone</text>
+  <text x="420" y="625" font-family="Arial, sans-serif" font-size="8" fill="#7f8c8d">(TLS over VPN/PrivateLink)</text>
+  
+  <!-- Transit Gateway -->
+  <g transform="translate(300, 630)">
+    <rect width="200" height="20" rx="5" fill="#34495e"/>
+    <text x="100" y="15" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="white">Transit Gateway / VPN Connection</text>
+  </g>
+</svg>
+

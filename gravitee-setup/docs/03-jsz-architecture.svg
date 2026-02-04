@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 800">
   <defs>
     <linearGradient id="jszBg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#c0392b;stop-opacity:0.1" />
@@ -39,14 +39,14 @@
   </defs>
   
   <!-- Background -->
-  <rect width="900" height="700" fill="#f8f9fa"/>
+  <rect width="900" height="800" fill="#f8f9fa"/>
   
   <!-- Title -->
   <text x="450" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#c0392b">Japan Secure Zone (JSZ) Architecture</text>
-  <text x="450" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#7f8c8d">Uses Core Zone MongoDB &amp; Elasticsearch</text>
+  <text x="450" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#7f8c8d">Uses Core Zone MySQL &amp; Elasticsearch</text>
   
   <!-- JSZ Main Container -->
-  <rect x="50" y="70" width="800" height="400" rx="15" fill="url(#jszBg)" stroke="#c0392b" stroke-width="2"/>
+  <rect x="50" y="70" width="800" height="500" rx="15" fill="url(#jszBg)" stroke="#c0392b" stroke-width="2"/>
   <rect x="50" y="70" width="800" height="45" rx="15" fill="url(#jszHeader)"/>
   <rect x="50" y="100" width="800" height="15" fill="url(#jszHeader)"/>
   <text x="450" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">JAPAN SECURE ZONE (JSZ)</text>
@@ -113,30 +113,54 @@
   
   <!-- JSZ App Zone -->
   <g transform="translate(80, 400)">
-    <rect width="350" height="60" rx="10" fill="url(#appGrad)" filter="url(#shadow2)"/>
-    <text x="175" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white">JSZ APP ZONE</text>
-    <text x="175" y="45" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.9)">Japan Backend Services Only</text>
+    <rect width="740" height="140" rx="10" fill="url(#appGrad)" filter="url(#shadow2)"/>
+    <text x="370" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">JSZ APP ZONE</text>
+    
+    <!-- Internal API Gateway -->
+    <rect x="30" y="40" width="200" height="85" rx="8" fill="#e74c3c" filter="url(#shadow2)"/>
+    <text x="130" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">Internal API Gateway</text>
+    <text x="130" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">For JSZ Internal Apps</text>
+    <text x="130" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Service-to-Service</text>
+    <text x="130" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="rgba(255,255,255,0.8)">No Internet Exposure</text>
+    
+    <!-- Japan Backend Services -->
+    <rect x="250" y="40" width="220" height="85" rx="8" fill="#2c3e50" filter="url(#shadow2)"/>
+    <text x="360" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">Japan Backend Services</text>
+    <text x="360" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#bdc3c7">• User Service</text>
+    <text x="360" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#bdc3c7">• Payment Service</text>
+    <text x="360" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#bdc3c7">• Reporting Service</text>
+    
+    <!-- JSZ Internal Apps -->
+    <rect x="490" y="40" width="220" height="85" rx="8" fill="#9b59b6" filter="url(#shadow2)"/>
+    <text x="600" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">JSZ Internal Apps</text>
+    <text x="600" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">• Admin Dashboard</text>
+    <text x="600" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">• Monitoring Tools</text>
+    <text x="600" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">• CI/CD Pipelines</text>
+    
+    <!-- Connection arrows -->
+    <line x1="230" y1="82" x2="250" y2="82" stroke="#555" stroke-width="2" marker-end="url(#arrow2)"/>
+    <line x1="230" y1="82" x2="490" y2="82" stroke="#555" stroke-width="2" marker-end="url(#arrow2)"/>
   </g>
   
   <!-- Blocked Section -->
-  <g transform="translate(470, 400)">
-    <rect width="350" height="60" rx="10" fill="#2c3e50" filter="url(#shadow2)"/>
-    <text x="175" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#e74c3c">❌ BLOCKED CONNECTIONS</text>
-    <text x="175" y="45" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#bdc3c7">Internet • US • EU • ASIA Regions</text>
+  <g transform="translate(80, 550)">
+    <rect width="740" height="40" rx="10" fill="#2c3e50" filter="url(#shadow2)"/>
+    <text x="370" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#e74c3c">❌ BLOCKED CONNECTIONS</text>
+    <text x="370" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#bdc3c7">Internet • US • EU • ASIA Regions</text>
   </g>
   
   <!-- VPN Connection Line -->
-  <path d="M 450 380 Q 550 420 700 490" stroke="#27ae60" stroke-width="3" fill="none" stroke-dasharray="8,4" marker-end="url(#arrowGreen)"/>
-  <text x="600" y="440" font-family="Arial, sans-serif" font-size="10" fill="#27ae60" font-weight="bold">VPN / Secure Channel</text>
+  <path d="M 450 540 Q 550 580 700 650" stroke="#27ae60" stroke-width="3" fill="none" stroke-dasharray="8,4" marker-end="url(#arrowGreen)"/>
+  <text x="600" y="600" font-family="Arial, sans-serif" font-size="10" fill="#27ae60" font-weight="bold">VPN / Secure Channel</text>
   
   <!-- Core Zone -->
-  <g transform="translate(150, 510)">
+  <g transform="translate(150, 620)">
     <rect width="600" height="150" rx="15" fill="url(#coreGrad2)" filter="url(#shadow2)"/>
     <text x="300" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">CORE ZONE (Shared Infrastructure)</text>
     
-    <!-- MongoDB -->
+    <!-- MySQL -->
     <rect x="50" y="50" width="160" height="70" rx="8" fill="#4db33d"/>
-    <text x="130" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white">MongoDB Atlas</text>
+    <text x="130" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white">MySQL Database</text>
     <text x="130" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.9)">(Shared)</text>
     
     <!-- Elasticsearch -->
@@ -153,7 +177,7 @@
   </g>
   
   <!-- Key Features Box -->
-  <g transform="translate(50, 480)">
+  <g transform="translate(50, 580)">
     <rect width="80" height="180" rx="8" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="1"/>
     <text x="40" y="20" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2c3e50">JSZ</text>
     <text x="40" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2c3e50">Features</text>
@@ -161,8 +185,9 @@
     <text x="40" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#27ae60">✓ Core DB</text>
     <text x="40" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#27ae60">✓ Core ES</text>
     <text x="40" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#27ae60">✓ Auto Sync</text>
-    <text x="40" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#e74c3c">✗ Internet</text>
-    <text x="40" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#e74c3c">✗ US/EU/ASIA</text>
+    <text x="40" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#27ae60">✓ Internal GW</text>
+    <text x="40" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#e74c3c">✗ Internet</text>
+    <text x="40" y="185" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#e74c3c">✗ US/EU/ASIA</text>
   </g>
 </svg>
 

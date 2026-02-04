@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="jszInnerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#feca57;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff9f43;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="coreBox2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f39c12;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d68910;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="gatewayGrad4" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1abc9c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16a085;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="mongoGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4db33d;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3d8c30;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="esGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f9b110;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d99a0d;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow8" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.25"/>
+    </filter>
+    <marker id="arrow7" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#27ae60"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="500" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#c0392b">JSZ Security Controls</text>
+  <text x="400" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#7f8c8d">JSZ Architecture (Uses Core Zone DB)</text>
+  
+  <!-- JSZ Inner DMZ -->
+  <g transform="translate(50, 70)">
+    <rect width="300" height="200" rx="10" fill="url(#jszInnerGrad)" filter="url(#shadow8)"/>
+    <text x="150" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2c3e50">JSZ INNER DMZ</text>
+    
+    <!-- Gateway Instances -->
+    <rect x="30" y="45" width="80" height="60" rx="5" fill="url(#gatewayGrad4)"/>
+    <text x="70" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">Gateway 1</text>
+    <text x="70" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(Japan)</text>
+    
+    <rect x="130" y="45" width="80" height="60" rx="5" fill="url(#gatewayGrad4)"/>
+    <text x="170" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">Gateway 2</text>
+    <text x="170" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(Japan)</text>
+    
+    <rect x="230" y="45" width="80" height="60" rx="5" fill="url(#gatewayGrad4)"/>
+    <text x="270" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">Gateway 3</text>
+    <text x="270" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(Japan)</text>
+    
+    <!-- Connection lines -->
+    <line x1="150" y1="200" x2="150" y2="220" stroke="#27ae60" stroke-width="3" stroke-dasharray="5,3" marker-end="url(#arrow7)"/>
+    <text x="170" y="215" font-family="Arial, sans-serif" font-size="9" fill="#27ae60">VPN / Secure Channel</text>
+    
+    <!-- Security Features -->
+    <rect x="30" y="120" width="240" height="65" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="150" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#2c3e50">✓ Japan-only API traffic</text>
+    <text x="150" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#2c3e50">✓ Enhanced WAF rules</text>
+    <text x="150" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#2c3e50">✓ Strict IP allowlist</text>
+  </g>
+  
+  <!-- Core Zone -->
+  <g transform="translate(450, 70)">
+    <rect width="300" height="200" rx="10" fill="url(#coreBox2)" filter="url(#shadow8)"/>
+    <text x="150" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">CORE ZONE</text>
+    
+    <!-- MySQL -->
+    <rect x="30" y="45" width="110" height="60" rx="5" fill="url(#mongoGrad2)"/>
+    <text x="85" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">MySQL</text>
+    <text x="85" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Database</text>
+    <text x="85" y="98" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(Shared)</text>
+    
+    <!-- Elasticsearch -->
+    <rect x="160" y="45" width="110" height="60" rx="5" fill="url(#esGrad3)"/>
+    <text x="215" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">Elasticsearch</text>
+    <text x="215" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">Cloud</text>
+    <text x="215" y="98" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="rgba(255,255,255,0.9)">(Shared)</text>
+    
+    <!-- What JSZ uses -->
+    <rect x="30" y="120" width="240" height="65" rx="5" fill="rgba(255,255,255,0.2)"/>
+    <text x="150" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">✓ Config Sync</text>
+    <text x="150" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">✓ Rate Limiting</text>
+    <text x="150" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">✓ Analytics</text>
+  </g>
+  
+  <!-- Security Features Box -->
+  <g transform="translate(50, 300)">
+    <rect width="700" height="170" rx="10" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="2"/>
+    <text x="350" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2c3e50">JSZ Security Features</text>
+    
+    <!-- Allowed -->
+    <rect x="30" y="45" width="300" height="110" rx="5" fill="#d5f4e6"/>
+    <text x="180" y="65" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#27ae60">✅ ALLOWED</text>
+    <text x="30" y="85" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• Japan-only API traffic (geo-locked at edge)</text>
+    <text x="30" y="105" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• Uses Core Zone MySQL (shared config)</text>
+    <text x="30" y="125" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• Uses Core Zone Elasticsearch (shared analytics)</text>
+    <text x="30" y="145" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• Automatic config sync (same as other regions)</text>
+    
+    <!-- Blocked -->
+    <rect x="370" y="45" width="300" height="110" rx="5" fill="#ffe6e6"/>
+    <text x="520" y="65" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#e74c3c">❌ BLOCKED</text>
+    <text x="380" y="85" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• No direct internet egress from gateway</text>
+    <text x="380" y="105" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• No communication with other regional gateways</text>
+    <text x="380" y="125" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• Japan backends only (no external API calls)</text>
+    <text x="380" y="145" font-family="Arial, sans-serif" font-size="10" fill="#2c3e50">• No US/EU/ASIA region access</text>
+  </g>
+</svg>
+

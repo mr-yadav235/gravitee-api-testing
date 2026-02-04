@@ -71,7 +71,11 @@ This document describes the enterprise multi-region deployment architecture for 
 ## 2. Global Architecture Overview
 
 ### 2.1 High-Level Multi-Region Architecture
-<img width="200" height="150" alt="image" src="https://github.com/user-attachments/assets/93ce2134-c740-4573-8108-26d4448b94fc" />
+
+![Global Architecture Overview](diagrams/01-global-architecture.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -138,8 +142,8 @@ This document describes the enterprise multi-region deployment architecture for 
 │   │                                                                                                          │  │
 │   │   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐              │  │
 │   │   │                 │    │                 │    │                 │    │                 │              │  │
-│   │   │  Management     │    │   Console       │    │   Developer     │    │   MongoDB       │              │  │
-│   │   │     API         │    │     UI          │    │    Portal       │    │   Atlas         │              │  │
+│   │   │  Management     │    │   Console       │    │   Developer     │    │   MySQL         │              │  │
+│   │   │     API         │    │     UI          │    │    Portal       │    │   Database      │              │  │
 │   │   │                 │    │                 │    │                 │    │                 │              │  │
 │   │   └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘              │  │
 │   │                                                                                                          │  │
@@ -168,17 +172,18 @@ This document describes the enterprise multi-region deployment architecture for 
 │                                                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 2.2 Component Distribution Matrix
 
 | Component | US Region | EU Region | ASIA Region | JSZ | Core Zone |
 |-----------|-----------|-----------|-------------|-----|-----------|
 | **External API Gateway** | ✅ Cluster | ✅ Cluster | ✅ Cluster | ✅ Isolated | ❌ |
-| **Internal API Gateway** | ❌ | ❌ | ❌ | ❌ | ✅ Cluster |
+| **Internal API Gateway** | ❌ | ❌ | ❌ | ✅ JSZ App Zone | ✅ Cluster |
 | Management API | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Console UI | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Developer Portal | ❌ | ❌ | ❌ | ❌ | ✅ |
-| MongoDB | ❌ | ❌ | ❌ | ❌ | ✅ |
+| MySQL | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Elasticsearch | ❌ | ❌ | ❌ | ❌ | ✅ |
 | WAF/LB | ✅ | ✅ | ✅ | ✅ | ✅ (Internal LB) |
 | Config Sync | ✅ Global | ✅ Global | ✅ Global | ⚠️ Limited | ✅ Source |
@@ -189,10 +194,15 @@ This document describes the enterprise multi-region deployment architecture for 
 
 ### 3.1 US Region Architecture
 
+![US Region Architecture](diagrams/07-us-region.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │                                    US REGION                                             │
-│                              (us-east-1 / us-west-2)                                    │
+│                         (On-Premise Data Centers)                                       │
 │                                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
 │  │                              OUTER DMZ                                             │  │
@@ -202,9 +212,9 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │                     EDGE SECURITY LAYER                                      │ │  │
 │  │   │                                                                              │ │  │
 │  │   │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐     │ │  │
-│  │   │  │   AWS       │   │   AWS       │   │   DDoS      │   │    SSL      │     │ │  │
-│  │   │  │   WAF       │   │   Shield    │   │  Protection │   │ Termination │     │ │  │
-│  │   │  │             │   │   Advanced  │   │             │   │             │     │ │  │
+│  │   │  │   WAF       │   │   DDoS      │   │   IDS/IPS   │   │    SSL      │     │ │  │
+│  │   │  │             │   │  Protection │   │   System    │   │ Termination │     │ │  │
+│  │   │  │             │   │             │   │             │   │             │     │ │  │
 │  │   │  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘     │ │  │
 │  │   │         │                 │                 │                 │            │ │  │
 │  │   │         └─────────────────┴─────────────────┴─────────────────┘            │ │  │
@@ -213,7 +223,7 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │                           │                 │                              │ │  │
 │  │   │                           │  Application    │                              │ │  │
 │  │   │                           │  Load Balancer  │                              │ │  │
-│  │   │                           │  (ALB/NLB)      │                              │ │  │
+│  │   │                           │                 │                              │ │  │
 │  │   │                           │                 │                              │ │  │
 │  │   │                           └────────┬────────┘                              │ │  │
 │  │   │                                    │                                       │ │  │
@@ -236,8 +246,8 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │   │   Gateway #1    │   │   Gateway #2    │   │   Gateway #3    │        │ │  │
 │  │   │   │   (Active)      │   │   (Active)      │   │   (Active)      │        │ │  │
 │  │   │   │                 │   │                 │   │                 │        │ │  │
-│  │   │   │   AZ: us-east-  │   │   AZ: us-east-  │   │   AZ: us-east-  │        │ │  │
-│  │   │   │       1a        │   │       1b        │   │       1c        │        │ │  │
+│  │   │   │   Data Center  │   │   Data Center  │   │   Data Center  │        │ │  │
+│  │   │   │       A         │   │       B         │   │       C         │        │ │  │
 │  │   │   │                 │   │                 │   │                 │        │ │  │
 │  │   │   │   Port: 8082    │   │   Port: 8082    │   │   Port: 8082    │        │ │  │
 │  │   │   │                 │   │                 │   │                 │        │ │  │
@@ -258,7 +268,7 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │                                                                          │ │  │
 │  │   │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                   │ │  │
 │  │   │   │  Service A  │   │  Service B  │   │  Service C  │                   │ │  │
-│  │   │   │  (EKS/ECS)  │   │  (Lambda)   │   │  (EC2)      │                   │ │  │
+│  │   │   │  (K8s)      │   │  (Container)│   │  (VM)       │                   │ │  │
 │  │   │   └─────────────┘   └─────────────┘   └─────────────┘                   │ │  │
 │  │   │                                                                          │ │  │
 │  │   └──────────────────────────────────────────────────────────────────────────┘ │  │
@@ -267,22 +277,30 @@ This document describes the enterprise multi-region deployment architecture for 
 │                                                                                         │
 │                              │                                                          │
 │                              │ Sync to Core Zone                                        │
-│                              │ (TLS over VPN/PrivateLink)                               │
+│                              │ (TLS over VPN)                                           │
 │                              ▼                                                          │
 │                    ┌─────────────────────┐                                             │
-│                    │   Transit Gateway   │                                             │
-│                    │   / VPN Connection  │                                             │
+│                    │   VPN Connection    │                                             │
+│                    │   (On-Premise)      │                                             │
 │                    └─────────────────────┘                                             │
 │                                                                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 3.2 EU Region Architecture
+
+![EU Region Architecture](diagrams/08-eu-region.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
+
+```
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │                                    EU REGION                                             │
-│                              (eu-west-1 / eu-central-1)                                 │
+│                         (On-Premise Data Centers)                                       │
 │                                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
 │  │                              OUTER DMZ                                             │  │
@@ -291,14 +309,14 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │                     EDGE SECURITY LAYER                                      │ │  │
 │  │   │                                                                              │ │  │
 │  │   │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                        │ │  │
-│  │   │  │   AWS WAF   │   │   GDPR      │   │   Geo       │                        │ │  │
-│  │   │  │   + Shield  │   │  Compliant  │   │  Blocking   │                        │ │  │
+│  │   │  │   WAF       │   │   GDPR      │   │   Geo       │                        │ │  │
+│  │   │  │             │   │  Compliant  │   │  Blocking   │                        │ │  │
 │  │   │  │             │   │   Rules     │   │             │                        │ │  │
 │  │   │  └─────────────┘   └─────────────┘   └─────────────┘                        │ │  │
 │  │   │                                                                              │ │  │
 │  │   │                    ┌─────────────────┐                                       │ │  │
-│  │   │                    │  ALB (GDPR      │                                       │ │  │
-│  │   │                    │  Compliant)     │                                       │ │  │
+│  │   │                    │  Load Balancer   │                                       │ │  │
+│  │   │                    │  (GDPR Compliant)│                                       │ │  │
 │  │   │                    └────────┬────────┘                                       │ │  │
 │  │   │                             │                                                │ │  │
 │  │   └─────────────────────────────┼────────────────────────────────────────────────┘ │  │
@@ -314,7 +332,7 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │                                                                            │   │  │
 │  │   │   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐        │   │  │
 │  │   │   │   Gateway #1    │   │   Gateway #2    │   │   Gateway #3    │        │   │  │
-│  │   │   │   eu-west-1a    │   │   eu-west-1b    │   │   eu-west-1c    │        │   │  │
+│  │   │   │   Data Center A  │   │   Data Center B │   │   Data Center C │        │   │  │
 │  │   │   └─────────────────┘   └─────────────────┘   └─────────────────┘        │   │  │
 │  │   │                                                                            │   │  │
 │  │   │   GDPR Compliance:                                                         │   │  │
@@ -331,10 +349,15 @@ This document describes the enterprise multi-region deployment architecture for 
 
 ### 3.3 ASIA Region Architecture
 
+![ASIA Region Architecture](diagrams/09-asia-region.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │                                   ASIA REGION                                            │
-│                           (ap-southeast-1 / ap-northeast-1)                             │
+│                         (On-Premise Data Centers)                                       │
 │                                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
 │  │                              OUTER DMZ                                             │  │
@@ -343,13 +366,13 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │                     EDGE SECURITY LAYER                                      │ │  │
 │  │   │                                                                              │ │  │
 │  │   │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                        │ │  │
-│  │   │  │   AWS WAF   │   │   Regional  │   │   China     │                        │ │  │
-│  │   │  │   + Shield  │   │   Compliance│   │  Firewall   │                        │ │  │
+│  │   │  │   WAF       │   │   Regional  │   │   China     │                        │ │  │
+│  │   │  │             │   │   Compliance│   │  Firewall   │                        │ │  │
 │  │   │  │             │   │   Rules     │   │  (If needed)│                        │ │  │
 │  │   │  └─────────────┘   └─────────────┘   └─────────────┘                        │ │  │
 │  │   │                                                                              │ │  │
 │  │   │                    ┌─────────────────┐                                       │ │  │
-│  │   │                    │  ALB            │                                       │ │  │
+│  │   │                    │  Load Balancer   │                                       │ │  │
 │  │   │                    └────────┬────────┘                                       │ │  │
 │  │   │                             │                                                │ │  │
 │  │   └─────────────────────────────┼────────────────────────────────────────────────┘ │  │
@@ -365,8 +388,8 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   │                                                                            │   │  │
 │  │   │   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐        │   │  │
 │  │   │   │   Gateway #1    │   │   Gateway #2    │   │   Gateway #3    │        │   │  │
-│  │   │   │   ap-southeast- │   │   ap-southeast- │   │   ap-northeast- │        │   │  │
-│  │   │   │       1a        │   │       1b        │   │       1a        │        │   │  │
+│  │   │   │   Data Center   │   │   Data Center   │   │   Data Center   │        │   │  │
+│  │   │   │       A         │   │       B         │   │       C         │        │   │  │
 │  │   │   └─────────────────┘   └─────────────────┘   └─────────────────┘        │   │  │
 │  │   │                                                                            │   │  │
 │  │   └───────────────────────────────────────────────────────────────────────────┘   │  │
@@ -375,6 +398,7 @@ This document describes the enterprise multi-region deployment architecture for 
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -460,7 +484,7 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │                                                                                    │  │
 │  │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │  │
 │  │   │  Service A  │  │  Service B  │  │  Service C  │  │  Service N  │             │  │
-│  │   │  (K8s)      │  │  (Lambda)   │  │  (ECS)      │  │  (EC2)      │             │  │
+│  │   │  (K8s)      │  │  (Container)│  │  (Container)│  │  (VM)       │             │  │
 │  │   └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘             │  │
 │  │                                                                                    │  │
 │  └───────────────────────────────────────┬───────────────────────────────────────────┘  │
@@ -475,8 +499,8 @@ This document describes the enterprise multi-region deployment architecture for 
 │  │   Purpose: Centralized control plane, shared data stores                          │  │
 │  │                                                                                    │  │
 │  │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │  │
-│  │   │ Management  │  │  Console    │  │   Portal    │  │  MongoDB    │             │  │
-│  │   │    API      │  │    UI       │  │             │  │  Atlas      │             │  │
+│  │   │ Management  │  │  Console    │  │   Portal    │  │  MySQL      │             │  │
+│  │   │    API      │  │    UI       │  │             │  │  Database   │             │  │
 │  │   └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘             │  │
 │  │                                                                                    │  │
 │  │   ┌─────────────┐                                                                 │  │
@@ -497,7 +521,7 @@ This document describes the enterprise multi-region deployment architecture for 
 | Outer DMZ | Inner DMZ | HTTP | 8082 | Gateway Traffic | Internal TLS |
 | Inner DMZ | Application | HTTP/gRPC | Various | Backend Calls | mTLS |
 | Inner DMZ | Core Zone | HTTPS | 443 | Config Sync | TLS + VPN |
-| Inner DMZ | Core Zone | HTTPS | 27017 | MongoDB | TLS + VPN |
+| Inner DMZ | Core Zone | HTTPS | 3306 | MySQL | TLS + VPN |
 | Inner DMZ | Core Zone | HTTPS | 9243 | Elasticsearch | TLS + VPN |
 
 ---
@@ -506,13 +530,18 @@ This document describes the enterprise multi-region deployment architecture for 
 
 ### 5.1 JSZ Architecture Overview
 
-The Japan Secure Zone (JSZ) is a highly restricted environment designed for sensitive Japanese market operations. JSZ Gateway connects to the **Core Zone MongoDB and Elasticsearch** (shared infrastructure) but with **restricted access** and **Japan-only API traffic**.
+The Japan Secure Zone (JSZ) is a highly restricted environment designed for sensitive Japanese market operations. JSZ Gateway connects to the **Core Zone MySQL and Elasticsearch** (shared infrastructure) but with **restricted access** and **Japan-only API traffic**.
+
+![JSZ Architecture](diagrams/03-jsz-architecture.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                          │
 │                            JAPAN SECURE ZONE (JSZ)                                       │
-│                        (Uses Core Zone MongoDB & Elasticsearch)                          │
+│                        (Uses Core Zone MySQL & Elasticsearch)                          │
 │                                                                                          │
 │                         ┌─────────────────────────────────┐                             │
 │                         │      SECURITY BOUNDARY          │                             │
@@ -572,7 +601,7 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │  └──────────────────────────────────────┼───────────────────────────────────────────┘  │
 │                                         │                                              │
 │                                         │ Secure Connection to Core Zone               │
-│                                         │ • MongoDB (Config & Rate Limit)              │
+│                                         │ • MySQL (Config & Rate Limit)              │
 │                                         │ • Elasticsearch (Analytics)                  │
 │                                         │                                              │
 │                                         ▼                                              │
@@ -581,8 +610,8 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │                              │            CORE ZONE                    │               │
 │                              │                                         │               │
 │                              │   ┌─────────────┐   ┌─────────────┐    │               │
-│                              │   │  MongoDB    │   │Elasticsearch│    │               │
-│                              │   │  Atlas      │   │  Cloud      │    │               │
+│                              │   │  MySQL      │   │Elasticsearch│    │               │
+│                              │   │  Database   │   │  Cluster    │    │               │
 │                              │   │  (Shared)   │   │  (Shared)   │    │               │
 │                              │   └─────────────┘   └─────────────┘    │               │
 │                              │                                         │               │
@@ -590,15 +619,17 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │                                                                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 5.2 JSZ Key Characteristics
 
 | Characteristic | Description |
 |----------------|-------------|
-| **Data Storage** | Uses Core Zone MongoDB and Elasticsearch (shared) |
+| **Data Storage** | Uses Core Zone MySQL and Elasticsearch (shared) |
 | **Network Access** | Japan IPs only for API traffic |
-| **Config Sync** | Automatic sync from Core Zone MongoDB |
+| **Config Sync** | Automatic sync from Core Zone MySQL |
 | **Analytics** | Sent to Core Zone Elasticsearch |
+| **Internal Gateway** | Dedicated Internal API Gateway in App Zone for JSZ internal apps |
 | **Geo-Restriction** | Strict Japan-only access at edge |
 | **Compliance** | Enhanced security for Japanese regulations (FISC, APPI) |
 | **Audit** | Complete audit trail for all operations |
@@ -609,18 +640,41 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 |---------|----------------------------|-------------------------|
 | Config Sync | Automatic from Core Zone | Automatic from Core Zone |
 | Analytics | Sent to Core Zone ES | Sent to Core Zone ES |
-| Database | Core Zone MongoDB (shared) | Core Zone MongoDB (shared) |
+| Database | Core Zone MySQL (shared) | Core Zone MySQL (shared) |
 | Internet Egress | Allowed (to backends) | Japan backends only |
 | API Definition Source | Core Zone | Core Zone |
 | Real-time Sync | Yes | Yes |
 | Geo-restriction | Configurable | **Japan only (strict)** |
 | Compliance | Standard | Enhanced (FISC, APPI) |
+| Internal Gateway | Core Zone only | **JSZ App Zone** |
+
+### 5.4 JSZ Internal API Gateway
+
+The JSZ includes a dedicated **Internal API Gateway** deployed within the JSZ App Zone. This gateway handles internal service-to-service communication within the Japan Secure Zone, providing:
+
+- **Internal Application Routing**: Routes traffic between JSZ internal applications (admin dashboards, monitoring tools, CI/CD pipelines)
+- **Service-to-Service Communication**: Manages communication between JSZ backend services
+- **No Internet Exposure**: Unlike the external JSZ Gateway, the Internal Gateway is not accessible from the internet
+- **Same Management**: Uses the same Core Zone MySQL and Elasticsearch for configuration and analytics
+- **JSZ Isolation**: Completely isolated from other regions (US, EU, ASIA) and the internet
+
+**Key Features:**
+- Authentication and authorization for internal services
+- Rate limiting for internal API calls
+- Request/response logging to Core Zone Elasticsearch
+- Audit trail for compliance (FISC, APPI)
+- Load balancing across JSZ backend services
 
 ---
 
 ## 6. Core Zone - Control Plane
 
 ### 6.1 Core Zone Architecture
+
+![Core Zone Architecture](diagrams/04-core-zone.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -677,9 +731,9 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │  │                         SHARED DATA STORES                                         │  │
 │  │                                                                                    │  │
 │  │   ┌─────────────────────────────────────────────────────────────────────────────┐ │  │
-│  │   │                        MONGODB ATLAS                                         │ │  │
+│  │   │                        MYSQL DATABASE                                        │ │  │
 │  │   │                                                                              │ │  │
-│  │   │   Cluster: gravitee.3urvlwj.mongodb.net                                     │ │  │
+│  │   │   On-Premise MySQL Cluster                                                  │ │  │
 │  │   │                                                                              │ │  │
 │  │   │   ┌───────────────┐   ┌───────────────┐   ┌───────────────┐                │ │  │
 │  │   │   │   Primary     │   │   Secondary   │   │   Secondary   │                │ │  │
@@ -693,14 +747,14 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │  │   │   • gravitee_asia (ASIA region rate limits)                                 │ │  │
 │  │   │   • gravitee_jsz (JSZ region rate limits)                                   │ │  │
 │  │   │                                                                              │ │  │
-│  │   │   Note: All regions including JSZ use this shared MongoDB                   │ │  │
+│  │   │   Note: All regions including JSZ use this shared MySQL                      │ │  │
 │  │   │                                                                              │ │  │
 │  │   └─────────────────────────────────────────────────────────────────────────────┘ │  │
 │  │                                                                                    │  │
 │  │   ┌─────────────────────────────────────────────────────────────────────────────┐ │  │
 │  │   │                       ELASTICSEARCH CLUSTER                                  │ │  │
 │  │   │                                                                              │ │  │
-│  │   │   Cluster: b0d634941bda479b81a2a8b6769ad703.us-central1.gcp.cloud.es.io    │ │  │
+│  │   │   Cluster: On-Premise Elasticsearch Cluster                                │ │  │
 │  │   │                                                                              │ │  │
 │  │   │   ┌───────────────┐   ┌───────────────┐   ┌───────────────┐                │ │  │
 │  │   │   │   Data Node   │   │   Data Node   │   │   Data Node   │                │ │  │
@@ -716,6 +770,7 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │  │   │   • gravitee-monitor-* (System monitoring)                                  │ │  │
 │  │   │                                                                              │ │  │
 │  │   │   Note: All regions including JSZ send analytics here                       │ │  │
+│  │   │   Cluster: On-Premise Elasticsearch                                         │ │  │
 │  │   │                                                                              │ │  │
 │  │   └─────────────────────────────────────────────────────────────────────────────┘ │  │
 │  │                                                                                    │  │
@@ -758,6 +813,7 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 6.2 Core Zone Responsibilities
 
@@ -778,6 +834,11 @@ The Japan Secure Zone (JSZ) is a highly restricted environment designed for sens
 ### 7.1 Internal Gateway Overview
 
 The Internal API Gateway is deployed within the Core Zone to handle **internal service-to-service communication**, **admin APIs**, and **internal application traffic**. Unlike external gateways, the Internal Gateway is not exposed to the internet and only serves internal consumers within the corporate network.
+
+![Internal API Gateway](diagrams/06-internal-gateway.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -858,12 +919,13 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │   │   │                                                                         │   │   │
 │   │   └─────────────────────────────────────────────────────────────────────────┘   │   │
 │   │                                                                                  │   │
-│   │   Uses same MongoDB and Elasticsearch as external gateways                      │   │
+│   │   Uses same MySQL and Elasticsearch as external gateways                      │   │
 │   │                                                                                  │   │
 │   └─────────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 7.2 Internal Gateway vs External Gateway Comparison
 
@@ -1055,7 +1117,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │  │ Rule # │ Action │   Port   │    Protocol     │   Destination   │    Description    │ │
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
 │  │ INT-8  │ ALLOW  │  80/443  │  TCP/HTTP(S)    │ Core Zone Svcs  │ Backend Services  │ │
-│  │ INT-9  │ ALLOW  │  27017   │   TCP/TLS       │ MongoDB         │ Config/Rate Limit │ │
+│  │ INT-9  │ ALLOW  │   3306   │   TCP/TLS       │ MySQL           │ Config/Rate Limit │ │
 │  │ INT-10 │ ALLOW  │   443    │   TCP/HTTPS     │ Elasticsearch   │ Analytics         │ │
 │  │ INT-11 │ ALLOW  │    53    │   UDP/TCP       │ DNS Servers     │ DNS Resolution    │ │
 │  │ INT-12 │ DENY   │   ALL    │      ALL        │ Internet        │ No internet egress│ │
@@ -1081,7 +1143,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 | **Rate Limiting** | Per service | Service-specific limits |
 | **Logging** | Full request/response | Complete audit trail |
 | **Analytics** | Internal ES index | Separate from external |
-| **Sync** | Same MongoDB | Shared config with external GW |
+| **Sync** | Same MySQL | Shared config with external GW |
 
 ### 7.7 Internal APIs Catalog
 
@@ -1224,8 +1286,8 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │   │           ▼                                                                      │   │
 │   │   ┌────────────────┐                                                            │   │
 │   │   │                │                                                            │   │
-│   │   │  MongoDB       │  ◄──── API Definition stored                              │   │
-│   │   │  Atlas         │                                                            │   │
+│   │   │  MySQL         │  ◄──── API Definition stored                              │   │
+│   │   │  Database      │                                                            │   │
 │   │   │                │                                                            │   │
 │   │   └───────┬────────┘                                                            │   │
 │   │           │                                                                      │   │
@@ -1243,7 +1305,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │  └───┬────┘       └───┬────┘       └───┬────┘       └───┬────┘              │         │
 │      │                │                │                │                   │         │
 │      │ 5a. Poll      │ 5b. Poll      │ 5c. Poll      │ 5d. Manual        │         │
-│      │    MongoDB    │    MongoDB    │    MongoDB    │     Approval      │         │
+│      │    MySQL      │    MySQL      │    MySQL      │     Approval      │         │
 │      │               │               │               │     Required      │         │
 │      ▼               ▼               ▼               ▼                   │         │
 │  ┌────────┐     ┌────────┐     ┌────────┐     ┌────────────────┐        │         │
@@ -1436,7 +1498,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │  │   Rule    │   Port   │    Protocol    │   Destination    │       Purpose         │   │
 │  ├───────────┼──────────┼────────────────┼──────────────────┼───────────────────────┤   │
 │  │  INN-O-1  │  80/443  │  TCP/HTTP(S)   │  Application Zone│ Backend Calls         │   │
-│  │  INN-O-2  │  27017   │    TCP/TLS     │   Core Zone      │ MongoDB (Config)      │   │
+│  │  INN-O-2  │   3306   │    TCP/TLS     │   Core Zone      │ MySQL (Config)        │   │
 │  │  INN-O-3  │   443    │   TCP/HTTPS    │   Core Zone      │ Elasticsearch         │   │
 │  │  INN-O-4  │    53    │    UDP/TCP     │   DNS Servers    │ DNS Resolution        │   │
 │  │  INN-O-5  │   123    │      UDP       │   NTP Servers    │ Time Sync             │   │
@@ -1472,7 +1534,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │  │   Rule    │   Port   │    Protocol    │   Destination    │       Purpose         │   │
 │  ├───────────┼──────────┼────────────────┼──────────────────┼───────────────────────┤   │
 │  │  JSZ-O-1  │  80/443  │  TCP/HTTP(S)   │  JSZ App Zone    │ Japan Backends        │   │
-│  │  JSZ-O-2  │  27017   │    TCP/TLS     │  Core Zone       │ Core Zone MongoDB     │   │
+│  │  JSZ-O-2  │   3306   │    TCP/TLS     │  Core Zone       │ Core Zone MySQL       │   │
 │  │  JSZ-O-3  │   443    │   TCP/HTTPS    │  Core Zone       │ Core Zone ES          │   │
 │  │  JSZ-O-4  │    53    │    UDP/TCP     │  DNS Servers     │ DNS Resolution        │   │
 │  │  JSZ-O-5  │   123    │      UDP       │  NTP Servers     │ Time Sync             │   │
@@ -1495,9 +1557,9 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │  ├───────────┼──────────┼────────────────┼──────────────────┼───────────────────────┤   │
 │  │  CORE-I-1 │   443    │   TCP/HTTPS    │  Admin Network   │ Console Access        │   │
 │  │  CORE-I-2 │   443    │   TCP/HTTPS    │  Developer Net   │ Portal Access         │   │
-│  │  CORE-I-3 │  27017   │    TCP/TLS     │  US Inner DMZ    │ MongoDB from US GW    │   │
-│  │  CORE-I-4 │  27017   │    TCP/TLS     │  EU Inner DMZ    │ MongoDB from EU GW    │   │
-│  │  CORE-I-5 │  27017   │    TCP/TLS     │  ASIA Inner DMZ  │ MongoDB from ASIA GW  │   │
+│  │  CORE-I-3 │   3306   │    TCP/TLS     │  US Inner DMZ    │ MySQL from US GW      │   │
+│  │  CORE-I-4 │   3306   │    TCP/TLS     │  EU Inner DMZ    │ MySQL from EU GW      │   │
+│  │  CORE-I-5 │   3306   │    TCP/TLS     │  ASIA Inner DMZ  │ MySQL from ASIA GW    │   │
 │  │  CORE-I-6 │   443    │   TCP/HTTPS    │  US Inner DMZ    │ ES from US GW         │   │
 │  │  CORE-I-7 │   443    │   TCP/HTTPS    │  EU Inner DMZ    │ ES from EU GW         │   │
 │  │  CORE-I-8 │   443    │   TCP/HTTPS    │  ASIA Inner DMZ  │ ES from ASIA GW       │   │
@@ -1509,7 +1571,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │  ┌───────────┬──────────┬────────────────┬──────────────────┬───────────────────────┐   │
 │  │   Rule    │   Port   │    Protocol    │   Destination    │       Purpose         │   │
 │  ├───────────┼──────────┼────────────────┼──────────────────┼───────────────────────┤   │
-│  │  CORE-O-1 │   443    │   TCP/HTTPS    │  MongoDB Atlas   │ Managed DB Access     │   │
+│  │  CORE-O-1 │   3306   │   TCP/TLS      │  MySQL Cluster    │ On-Premise DB Access  │   │
 │  │  CORE-O-2 │   443    │   TCP/HTTPS    │  Elastic Cloud   │ Managed ES Access     │   │
 │  │  CORE-O-3 │   443    │   TCP/HTTPS    │  IdP (SSO)       │ Authentication        │   │
 │  │  CORE-O-4 │    53    │    UDP/TCP     │  DNS Servers     │ DNS Resolution        │   │
@@ -1526,20 +1588,20 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 | **Outer DMZ (Global)** | IN | 443 | HTTPS | Internet | API Traffic |
 | | OUT | 8082 | HTTP | Inner DMZ | To Gateway |
 | **Inner DMZ (Global)** | IN | 8082 | HTTP | Outer DMZ | From LB |
-| | OUT | 27017 | TLS | Core Zone | MongoDB |
+| | OUT | 3306 | TLS | Core Zone | MySQL |
 | | OUT | 443 | HTTPS | Core Zone | Elasticsearch |
 | | OUT | 80/443 | HTTP/S | App Zone | Backend |
 | **JSZ Outer DMZ** | IN | 443 | HTTPS | Japan IPs | API Traffic |
 | **JSZ Inner DMZ** | IN | 8082 | HTTP | JSZ Outer | From LB |
-| | OUT | 27017 | TLS | Core Zone | Core MongoDB |
+| | OUT | 3306 | TLS | Core Zone | Core MySQL |
 | | OUT | 443 | HTTPS | Core Zone | Core ES |
 | | OUT | 80/443 | HTTP/S | JSZ App Zone | JP Backends |
 | | OUT | * | * | Internet | **BLOCKED** |
 | | OUT | * | * | US/EU/ASIA | **BLOCKED** |
 | **Core Zone** | IN | 443 | HTTPS | Admin/Dev | Console/Portal |
-| | IN | 27017 | TLS | All GW | MongoDB |
+| | IN | 3306 | TLS | All GW | MySQL |
 | | IN | 443 | HTTPS | All GW | Elasticsearch |
-| | OUT | 443 | HTTPS | MongoDB Atlas | Managed DB |
+| | OUT | 3306 | TLS | MySQL Cluster | On-Premise DB |
 | | OUT | 443 | HTTPS | Elastic Cloud | Managed ES |
 
 ---
@@ -1608,7 +1670,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 │   │   │  └───────────┘  │   │  └───────────┘  │                                    │   │
 │   │   │                 │   │                 │                                    │   │
 │   │   │  ┌───────────┐  │   │  ┌───────────┐  │                                    │   │
-│   │   │  │ MongoDB   │  │   │  │ MongoDB   │  │                                    │   │
+│   │   │  │ MySQL     │  │   │  │ MySQL     │  │                                    │   │
 │   │   │  │ (Primary) │◄─┼───┼─▶│ (Replica) │  │                                    │   │
 │   │   │  └───────────┘  │   │  └───────────┘  │                                    │   │
 │   │   │                 │   │                 │                                    │   │
@@ -1628,7 +1690,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 |-----------|--------|-----|-----|----------|
 | API Gateway | US/EU/ASIA | 30 sec | 0 | Active-Active, auto-failover |
 | API Gateway | JSZ | 15 min | 0 | Active-Passive, manual |
-| MongoDB | Core Zone | 60 sec | < 1 sec | Atlas automatic failover |
+| MySQL | Core Zone | 60 sec | < 1 sec | On-Premise cluster failover |
 | Elasticsearch | Core Zone | 2 min | < 1 min | Cluster auto-recovery |
 | Management API | Core Zone | 2 min | 0 | K8s auto-restart |
 | Console/Portal | Core Zone | 2 min | N/A | K8s auto-restart |
@@ -1728,7 +1790,7 @@ The Internal API Gateway is deployed within the Core Zone to handle **internal s
 | Request Rate | 📊 | 📊 | 📊 | 📊 (Local) | N/A |
 | Error Rate | 📊 | 📊 | 📊 | 📊 (Local) | N/A |
 | Latency P99 | 📊 | 📊 | 📊 | 📊 (Local) | N/A |
-| MongoDB Status | N/A | N/A | N/A | ✅ (Local) | ✅ |
+| MySQL Status | N/A | N/A | N/A | ✅ (Local) | ✅ |
 | ES Status | N/A | N/A | N/A | ✅ (Local) | ✅ |
 | Mgmt API Health | N/A | N/A | N/A | N/A | ✅ |
 | Config Sync | ✅ | ✅ | ✅ | ⚠️ Manual | ✅ |

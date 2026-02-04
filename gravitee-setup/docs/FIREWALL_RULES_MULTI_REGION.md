@@ -38,6 +38,11 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 
 ### Network Architecture Summary
 
+![Firewall Zones Overview](diagrams/02-firewall-zones.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                          │
@@ -62,27 +67,23 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │   │      │      │    │      │      │    │      │      │    │ └────────┬────────┘ │     │
 │   └──────┼──────┘    └──────┼──────┘    └──────┼──────┘    └──────────┼──────────┘     │
 │          │                  │                  │                      │                │
-│          │                  │                  │                      │                │
-│          │                  │                  │                      │                │
 │          └──────────────────┼──────────────────┴──────────────────────┘                │
 │                             │                                                          │
 │                             ▼                                                          │
 │          ┌───────────────────────────────────────────────────┐                        │
-│          │                                                    │                        │
 │          │                    CORE ZONE                       │                        │
 │          │              (Control Plane + Data)                │                        │
-│          │                                                    │                        │
 │          │    ┌──────────────┐        ┌──────────────┐       │                        │
-│          │    │   MongoDB    │        │Elasticsearch │       │                        │
+│          │    │   MySQL      │        │Elasticsearch │       │                        │
 │          │    │   (Shared)   │        │   (Shared)   │       │                        │
 │          │    └──────────────┘        └──────────────┘       │                        │
-│          │                                                    │                        │
 │          └───────────────────────────────────────────────────┘                        │
 │                                                                                          │
-│   Note: ALL regions (US, EU, ASIA, JSZ) connect to Core Zone MongoDB & Elasticsearch   │
+│   Note: ALL regions (US, EU, ASIA, JSZ) connect to Core Zone MySQL & Elasticsearch   │
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -103,7 +104,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 | ASIA App Zone | 10.3.2.0/24 | Backend services | Trusted |
 | JSZ Outer DMZ | 10.4.0.0/24 | Edge (Japan only) | Restricted |
 | JSZ Inner DMZ | 10.4.1.0/24 | JSZ Gateway | Highly Restricted |
-| JSZ App Zone | 10.4.2.0/24 | Japan backends | Trusted |
+| JSZ App Zone | 10.4.2.0/24 | Internal Gateway + Japan backends | Trusted |
 | Core Zone | 10.0.0.0/16 | Control plane | Highly Trusted |
 
 ---
@@ -161,7 +162,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  │ Rule # │ Action │   Port   │    Protocol     │   Destination   │    Description    │ │
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
 │  │ US-I-5 │ ALLOW  │  80/443  │  TCP/HTTP(S)    │ 10.1.2.0/24     │ To App Zone       │ │
-│  │ US-I-6 │ ALLOW  │  27017   │   TCP/TLS       │ 10.0.10.0/24    │ MongoDB (Core)    │ │
+│  │ US-I-6 │ ALLOW  │   3306   │   TCP/TLS       │ 10.0.10.0/24    │ MySQL (Core)     │ │
 │  │ US-I-7 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.0.20.0/24    │ Elasticsearch     │ │
 │  │ US-I-8 │ ALLOW  │    53    │   UDP/TCP       │ DNS Servers     │ DNS Resolution    │ │
 │  │ US-I-9 │ ALLOW  │   123    │      UDP        │ NTP Servers     │ Time sync         │ │
@@ -261,7 +262,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  │ Rule # │ Action │   Port   │    Protocol     │   Destination   │    Description    │ │
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
 │  │ EU-I-5 │ ALLOW  │  80/443  │  TCP/HTTP(S)    │ 10.2.2.0/24     │ To EU App Zone    │ │
-│  │ EU-I-6 │ ALLOW  │  27017   │   TCP/TLS       │ 10.0.10.0/24    │ MongoDB (Core)*   │ │
+│  │ EU-I-6 │ ALLOW  │   3306   │   TCP/TLS       │ 10.0.10.0/24    │ MySQL (Core)*    │ │
 │  │ EU-I-7 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.0.20.0/24    │ Elasticsearch*    │ │
 │  │ EU-I-8 │ ALLOW  │    53    │   UDP/TCP       │ EU DNS Servers  │ DNS (EU only)     │ │
 │  │ EU-I-9 │ ALLOW  │   123    │      UDP        │ EU NTP Servers  │ Time sync (EU)    │ │
@@ -328,7 +329,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  │ Rule # │ Action │   Port   │    Protocol     │   Destination   │    Description    │ │
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
 │  │ AS-I-5 │ ALLOW  │  80/443  │  TCP/HTTP(S)    │ 10.3.2.0/24     │ To ASIA App Zone  │ │
-│  │ AS-I-6 │ ALLOW  │  27017   │   TCP/TLS       │ 10.0.10.0/24    │ MongoDB (Core)    │ │
+│  │ AS-I-6 │ ALLOW  │   3306   │   TCP/TLS       │ 10.0.10.0/24    │ MySQL (Core)     │ │
 │  │ AS-I-7 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.0.20.0/24    │ Elasticsearch     │ │
 │  │ AS-I-8 │ ALLOW  │    53    │   UDP/TCP       │ DNS Servers     │ DNS Resolution    │ │
 │  │ AS-I-9 │ ALLOW  │   123    │      UDP        │ NTP Servers     │ Time sync         │ │
@@ -383,7 +384,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │                          JSZ INNER DMZ FIREWALL RULES                                    │
-│                        (Uses Core Zone MongoDB & Elasticsearch)                          │
+│                        (Uses Core Zone MySQL & Elasticsearch)                          │
 │                                                                                          │
 │  INBOUND RULES:                                                                          │
 │  ┌────────┬────────┬──────────┬─────────────────┬─────────────────┬───────────────────┐ │
@@ -400,7 +401,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  │ Rule # │ Action │   Port   │    Protocol     │   Destination   │    Description    │ │
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
 │  │JSZ-I-5 │ ALLOW  │  80/443  │  TCP/HTTP(S)    │ 10.4.2.0/24     │ JSZ App Zone      │ │
-│  │JSZ-I-6 │ ALLOW  │  27017   │   TCP/TLS       │ 10.0.10.0/24    │ Core Zone MongoDB │ │
+│  │JSZ-I-6 │ ALLOW  │   3306   │   TCP/TLS       │ 10.0.10.0/24    │ Core Zone MySQL  │ │
 │  │JSZ-I-7 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.0.20.0/24    │ Core Zone ES      │ │
 │  │JSZ-I-8 │ ALLOW  │    53    │   UDP/TCP       │ DNS Servers     │ DNS Resolution    │ │
 │  │JSZ-I-9 │ ALLOW  │   123    │      UDP        │ NTP Servers     │ Time Sync         │ │
@@ -412,7 +413,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  └────────┴────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ │
 │                                                                                          │
 │  ✅  JSZ INNER DMZ CONNECTS TO CORE ZONE FOR:                                           │
-│      • MongoDB (Config sync, Rate limiting)                                             │
+│      • MySQL (Config sync, Rate limiting)                                             │
 │      • Elasticsearch (Analytics reporting)                                              │
 │                                                                                          │
 │  ❌  JSZ INNER DMZ BLOCKED FROM:                                                        │
@@ -423,6 +424,11 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 ```
 
 ### 6.3 JSZ Security Controls
+
+![JSZ Security Controls](diagrams/11-jsz-security-controls.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -453,7 +459,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  │     │                                                                          │     ││
 │  │     │   ┌─────────────────────┐       ┌─────────────────────┐                 │     ││
 │  │     │   │                     │       │                     │                 │     ││
-│  │     │   │   MongoDB Atlas     │       │   Elasticsearch     │                 │     ││
+│  │     │   │   MySQL Database    │       │   Elasticsearch     │                 │     ││
 │  │     │   │   (Shared)          │       │   (Shared)          │                 │     ││
 │  │     │   │                     │       │                     │                 │     ││
 │  │     │   │   • API Configs     │       │   • JSZ Analytics   │                 │     ││
@@ -470,7 +476,7 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐│
 │  │                                                                                      ││
 │  │   ✅ Japan-only API traffic (geo-locked at edge)                                    ││
-│  │   ✅ Uses Core Zone MongoDB (shared config)                                         ││
+│  │   ✅ Uses Core Zone MySQL (shared config)                                         ││
 │  │   ✅ Uses Core Zone Elasticsearch (shared analytics)                                ││
 │  │   ✅ Automatic config sync (same as other regions)                                  ││
 │  │   ✅ Enhanced WAF rules for Japanese compliance                                     ││
@@ -481,6 +487,79 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  │   ❌ Japan backends only (no external API calls)                                    ││
 │  │                                                                                      ││
 │  └─────────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+```
+</details>
+
+### 6.4 JSZ App Zone (Internal Gateway & Backend Services)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                          JSZ APP ZONE FIREWALL RULES                                     │
+│                    (Internal Gateway & Backend Services)                                 │
+│                                                                                          │
+│  INBOUND RULES:                                                                          │
+│  ┌────────┬────────┬──────────┬─────────────────┬─────────────────┬───────────────────┐ │
+│  │ Rule # │ Action │   Port   │    Protocol     │     Source      │    Description    │ │
+│  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
+│  │JSZ-A-1 │ ALLOW  │   8083   │   TCP/HTTP      │ 10.4.1.0/24     │ From JSZ Gateway  │ │
+│  │JSZ-A-2 │ ALLOW  │   8083   │   TCP/HTTP      │ 10.4.2.0/24     │ From Internal GW  │ │
+│  │JSZ-A-3 │ ALLOW  │   8080   │   TCP/HTTP      │ 10.4.2.0/24     │ Internal Apps     │ │
+│  │JSZ-A-4 │ ALLOW  │    22    │   TCP/SSH       │ 10.4.100.0/28   │ JSZ Admin ONLY    │ │
+│  │JSZ-A-5 │ DENY   │   ALL    │      ALL        │   0.0.0.0/0     │ Default deny      │ │
+│  └────────┴────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ │
+│                                                                                          │
+│  OUTBOUND RULES:                                                                         │
+│  ┌────────┬────────┬──────────┬─────────────────┬─────────────────┬───────────────────┐ │
+│  │ Rule # │ Action │   Port   │    Protocol     │   Destination   │    Description    │ │
+│  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
+│  │JSZ-A-6 │ ALLOW  │  80/443  │  TCP/HTTP(S)    │ 10.4.2.0/24     │ To Backend Svc    │ │
+│  │JSZ-A-7 │ ALLOW  │   3306   │   TCP/TLS       │ 10.0.10.0/24    │ Core Zone MySQL  │ │
+│  │JSZ-A-8 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.0.20.0/24    │ Core Zone ES      │ │
+│  │JSZ-A-9 │ ALLOW  │    53    │   UDP/TCP       │ DNS Servers     │ DNS Resolution    │ │
+│  │JSZ-A-10│ DENY   │   ALL    │      ALL        │ INTERNET        │ ❌ NO INTERNET    │ │
+│  │JSZ-A-11│ DENY   │   ALL    │      ALL        │ 10.1.0.0/16     │ ❌ NO US Region   │ │
+│  │JSZ-A-12│ DENY   │   ALL    │      ALL        │ 10.2.0.0/16     │ ❌ NO EU Region   │ │
+│  │JSZ-A-13│ DENY   │   ALL    │      ALL        │ 10.3.0.0/16     │ ❌ NO ASIA Region │ │
+│  │JSZ-A-14│ DENY   │   ALL    │      ALL        │   0.0.0.0/0     │ Default deny      │ │
+│  └────────┴────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ │
+│                                                                                          │
+│  JSZ APP ZONE COMPONENTS:                                                                │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                                                                                      │ │
+│  │   ┌──────────────────────────────────────────────────────────────────────────────┐   │ │
+│  │   │                    INTERNAL API GATEWAY (JSZ)                                │   │ │
+│  │   │                                                                              │   │ │
+│  │   │   • Routes internal JSZ app traffic                                         │   │ │
+│  │   │   • Service-to-service communication                                        │   │ │
+│  │   │   • No internet exposure                                                    │   │ │
+│  │   │   • Uses Core Zone MySQL/ES                                               │   │ │
+│  │   │   • Port: 8083 (Internal)                                                   │   │ │
+│  │   │                                                                              │   │ │
+│  │   └──────────────────────────────────────────────────────────────────────────────┘   │ │
+│  │                                                                                      │ │
+│  │   ┌──────────────────────────────────────────────────────────────────────────────┐   │ │
+│  │   │                    JSZ BACKEND SERVICES                                      │   │ │
+│  │   │                                                                              │   │ │
+│  │   │   • User Service                                                           │   │ │
+│  │   │   • Payment Service                                                         │   │ │
+│  │   │   • Reporting Service                                                       │   │ │
+│  │   │   • Other Japan-specific services                                           │   │ │
+│  │   │                                                                              │   │ │
+│  │   └──────────────────────────────────────────────────────────────────────────────┘   │ │
+│  │                                                                                      │ │
+│  │   ┌──────────────────────────────────────────────────────────────────────────────┐   │ │
+│  │   │                    JSZ INTERNAL APPLICATIONS                                  │   │ │
+│  │   │                                                                              │   │ │
+│  │   │   • Admin Dashboard                                                         │   │ │
+│  │   │   • Monitoring Tools                                                        │   │ │
+│  │   │   • CI/CD Pipelines                                                         │   │ │
+│  │   │   • Security Scanners                                                       │   │ │
+│  │   │                                                                              │   │ │
+│  │   └──────────────────────────────────────────────────────────────────────────────┘   │ │
+│  │                                                                                      │ │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -502,23 +581,25 @@ This document provides comprehensive firewall rules for the multi-region Gravite
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
 │  │CORE-1  │ ALLOW  │   443    │   TCP/HTTPS     │ Admin Network   │ Console Access    │ │
 │  │CORE-2  │ ALLOW  │   443    │   TCP/HTTPS     │ Developer Net   │ Portal Access     │ │
-│  │CORE-3  │ ALLOW  │  27017   │   TCP/TLS       │ 10.1.1.0/24     │ US GW → MongoDB   │ │
-│  │CORE-4  │ ALLOW  │  27017   │   TCP/TLS       │ 10.2.1.0/24     │ EU GW → MongoDB   │ │
-│  │CORE-5  │ ALLOW  │  27017   │   TCP/TLS       │ 10.3.1.0/24     │ ASIA GW → MongoDB │ │
+│  │CORE-3  │ ALLOW  │   3306   │   TCP/TLS       │ 10.1.1.0/24     │ US GW → MySQL     │ │
+│  │CORE-4  │ ALLOW  │   3306   │   TCP/TLS       │ 10.2.1.0/24     │ EU GW → MySQL     │ │
+│  │CORE-5  │ ALLOW  │   3306   │   TCP/TLS       │ 10.3.1.0/24     │ ASIA GW → MySQL   │ │
 │  │CORE-6  │ ALLOW  │   443    │   TCP/HTTPS     │ 10.1.1.0/24     │ US GW → ES        │ │
 │  │CORE-7  │ ALLOW  │   443    │   TCP/HTTPS     │ 10.2.1.0/24     │ EU GW → ES        │ │
 │  │CORE-8  │ ALLOW  │   443    │   TCP/HTTPS     │ 10.3.1.0/24     │ ASIA GW → ES      │ │
-│  │CORE-9  │ ALLOW  │    22    │   TCP/SSH       │ 10.0.100.0/24   │ Admin SSH         │ │
-│  │CORE-10 │ ALLOW  │   6443   │   TCP/HTTPS     │ 10.0.100.0/24   │ K8s API           │ │
-│  │CORE-11 │ DENY   │   ALL    │      ALL        │ JSZ (Direct)    │ ❌ No direct JSZ  │ │
-│  │CORE-12 │ DENY   │   ALL    │      ALL        │   0.0.0.0/0     │ Default deny      │ │
+│  │CORE-9  │ ALLOW  │   3306   │   TCP/TLS       │ 10.4.2.0/24     │ JSZ Internal GW → MySQL  │ │
+│  │CORE-10 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.4.2.0/24     │ JSZ Internal GW → ES │ │
+│  │CORE-11 │ ALLOW  │    22    │   TCP/SSH       │ 10.0.100.0/24   │ Admin SSH         │ │
+│  │CORE-12 │ ALLOW  │   6443   │   TCP/HTTPS     │ 10.0.100.0/24   │ K8s API           │ │
+│  │CORE-13 │ DENY   │   ALL    │      ALL        │ JSZ (Direct)    │ ❌ No direct JSZ  │ │
+│  │CORE-14 │ DENY   │   ALL    │      ALL        │   0.0.0.0/0     │ Default deny      │ │
 │  └────────┴────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ │
 │                                                                                          │
 │  OUTBOUND RULES:                                                                         │
 │  ┌────────┬────────┬──────────┬─────────────────┬─────────────────┬───────────────────┐ │
 │  │ Rule # │ Action │   Port   │    Protocol     │   Destination   │    Description    │ │
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
-│  │CORE-13 │ ALLOW  │   443    │   TCP/HTTPS     │ MongoDB Atlas   │ Managed DB        │ │
+│  │CORE-13 │ ALLOW  │   3306   │   TCP/TLS       │ MySQL Cluster   │ On-Premise DB     │ │
 │  │CORE-14 │ ALLOW  │   443    │   TCP/HTTPS     │ Elastic Cloud   │ Managed ES        │ │
 │  │CORE-15 │ ALLOW  │   443    │   TCP/HTTPS     │ IdP (SSO)       │ Authentication    │ │
 │  │CORE-16 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.4.3.0/28     │ JSZ Config Export │ │
@@ -634,7 +715,7 @@ The Internal API Gateway is deployed within the Core Zone to handle internal ser
 │  ├────────┼────────┼──────────┼─────────────────┼─────────────────┼───────────────────┤ │
 │  │ INT-13 │ ALLOW  │  80/443  │  TCP/HTTP(S)    │ 10.0.50.0/24    │ Backend Services  │ │
 │  │ INT-14 │ ALLOW  │   8080   │   TCP/HTTP      │ 10.0.50.0/24    │ Backend Services  │ │
-│  │ INT-15 │ ALLOW  │  27017   │   TCP/TLS       │ 10.0.10.0/24    │ MongoDB           │ │
+│  │ INT-15 │ ALLOW  │   3306   │   TCP/TLS       │ 10.0.10.0/24    │ MySQL             │ │
 │  │ INT-16 │ ALLOW  │   443    │   TCP/HTTPS     │ 10.0.20.0/24    │ Elasticsearch     │ │
 │  │ INT-17 │ ALLOW  │    53    │   UDP/TCP       │ 10.0.5.0/24     │ DNS Servers       │ │
 │  │ INT-18 │ ALLOW  │   123    │      UDP        │ 10.0.6.0/24     │ NTP Servers       │ │
@@ -662,7 +743,7 @@ The Internal API Gateway is deployed within the Core Zone to handle internal ser
 | **Location** | Regional DMZ | Core Zone |
 | **Internet Access** | ✅ Inbound (via LB) | ❌ None |
 | **Regional Access** | ✅ Own region | ❌ None |
-| **Core Zone Access** | ✅ MongoDB, ES | ✅ MongoDB, ES, Services |
+| **Core Zone Access** | ✅ MySQL, ES | ✅ MySQL, ES, Services |
 | **Consumer Source** | Internet | Internal network only |
 | **Authentication** | API Key, OAuth, JWT | mTLS, JWT, Service Account |
 | **Use Cases** | Public APIs | Internal APIs, Admin, S2S |
@@ -676,7 +757,7 @@ The Internal API Gateway is deployed within the Core Zone to handle internal ser
 | CI/CD (10.0.80.0/24) | Internal GW | 8082 | Deployment APIs |
 | Backend Services (10.0.50.0/24) | Internal GW | 8082 | Service-to-service |
 | Internal GW | Backend Services | 80/443/8080 | API routing |
-| Internal GW | MongoDB | 27017 | Config/Rate limit |
+| Internal GW | MySQL | 3306 | Config/Rate limit |
 | Internal GW | Elasticsearch | 443 | Analytics |
 | Prometheus | Internal GW | 9090 | Metrics scrape |
 
@@ -685,6 +766,11 @@ The Internal API Gateway is deployed within the Core Zone to handle internal ser
 ## 9. Inter-Region Communication Rules
 
 ### 8.1 VPN/PrivateLink Connections
+
+![Inter-Region Communication](diagrams/10-inter-region-communication.svg)
+
+<details>
+<summary>View ASCII Diagram (fallback)</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -733,6 +819,8 @@ The Internal API Gateway is deployed within the Core Zone to handle internal ser
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### 8.2 Cross-Region Traffic Matrix
 
@@ -754,18 +842,19 @@ The Internal API Gateway is deployed within the Core Zone to handle internal ser
 
 ## 10. Implementation Examples
 
-### 9.1 AWS Security Groups (Terraform)
+### 9.1 On-Premise Firewall Rules (Example Configuration)
 
 ```hcl
 # ============================================
 # US Region Security Groups
 # ============================================
 
-# US Outer DMZ Security Group
-resource "aws_security_group" "us_outer_dmz" {
+# US Outer DMZ Firewall Rules
+# Example: On-Premise Firewall Configuration
+# US Outer DMZ Rules
   name        = "gravitee-us-outer-dmz"
   description = "US Outer DMZ - Edge Security"
-  vpc_id      = var.us_vpc_id
+  # Network segment: 10.1.0.0/24
 
   ingress {
     description = "HTTPS from Internet"
@@ -788,7 +877,7 @@ resource "aws_security_group" "us_outer_dmz" {
     from_port       = 8082
     to_port         = 8082
     protocol        = "tcp"
-    security_groups = [aws_security_group.us_inner_dmz.id]
+    # Allow from Inner DMZ
   }
 
   egress {
@@ -807,7 +896,7 @@ resource "aws_security_group" "us_outer_dmz" {
 }
 
 # US Inner DMZ Security Group
-resource "aws_security_group" "us_inner_dmz" {
+# US Inner DMZ Rules
   name        = "gravitee-us-inner-dmz"
   description = "US Inner DMZ - API Gateway"
   vpc_id      = var.us_vpc_id
@@ -817,7 +906,7 @@ resource "aws_security_group" "us_inner_dmz" {
     from_port       = 8082
     to_port         = 8082
     protocol        = "tcp"
-    security_groups = [aws_security_group.us_outer_dmz.id]
+    # Allow from Outer DMZ
   }
 
   ingress {
@@ -837,9 +926,9 @@ resource "aws_security_group" "us_inner_dmz" {
   }
 
   egress {
-    description = "MongoDB to Core Zone"
-    from_port   = 27017
-    to_port     = 27017
+    description = "MySQL to Core Zone"
+    from_port   = 3306
+    to_port     = 3306
     protocol    = "tcp"
     cidr_blocks = [var.core_zone_cidr]
   }
@@ -864,7 +953,7 @@ resource "aws_security_group" "us_inner_dmz" {
 # ============================================
 
 # JSZ Outer DMZ - Japan Only
-resource "aws_security_group" "jsz_outer_dmz" {
+# JSZ Outer DMZ Rules
   name        = "gravitee-jsz-outer-dmz"
   description = "JSZ Outer DMZ - Japan IPs Only"
   vpc_id      = var.jsz_vpc_id
@@ -882,7 +971,7 @@ resource "aws_security_group" "jsz_outer_dmz" {
     from_port       = 8082
     to_port         = 8082
     protocol        = "tcp"
-    security_groups = [aws_security_group.jsz_inner_dmz.id]
+    # Allow from JSZ Inner DMZ
   }
 
   # No other egress allowed
@@ -895,7 +984,7 @@ resource "aws_security_group" "jsz_outer_dmz" {
 }
 
 # JSZ Inner DMZ - Completely Isolated
-resource "aws_security_group" "jsz_inner_dmz" {
+# JSZ Inner DMZ Rules
   name        = "gravitee-jsz-inner-dmz"
   description = "JSZ Inner DMZ - Isolated Gateway"
   vpc_id      = var.jsz_vpc_id
@@ -905,7 +994,7 @@ resource "aws_security_group" "jsz_inner_dmz" {
     from_port       = 8082
     to_port         = 8082
     protocol        = "tcp"
-    security_groups = [aws_security_group.jsz_outer_dmz.id]
+    # Allow from Outer DMZ
   }
 
   ingress {
@@ -925,11 +1014,11 @@ resource "aws_security_group" "jsz_inner_dmz" {
   }
 
   egress {
-    description = "To Core Zone MongoDB"
-    from_port   = 27017
-    to_port     = 27017
+    description = "To Core Zone MySQL"
+    from_port   = 3306
+    to_port     = 3306
     protocol    = "tcp"
-    cidr_blocks = [var.core_zone_mongodb_cidr]
+    cidr_blocks = [var.core_zone_mysql_cidr]
   }
 
   egress {
@@ -956,7 +1045,7 @@ resource "aws_security_group" "jsz_inner_dmz" {
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    security_groups = [aws_security_group.jsz_inner_dmz.id]
+    # Allow from JSZ Inner DMZ
   }
 
   # NO OTHER EGRESS - Especially no egress to Core Zone
@@ -1027,8 +1116,8 @@ iptables -A OUTPUT -p tcp --dport 80 -d 10.4.2.0/24 -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 443 -d 10.4.2.0/24 -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 8080 -d 10.4.2.0/24 -j ACCEPT
 
-# Allow to Core Zone MongoDB
-iptables -A OUTPUT -p tcp --dport 27017 -d 10.0.10.0/24 -j ACCEPT
+# Allow to Core Zone MySQL
+iptables -A OUTPUT -p tcp --dport 3306 -d 10.0.10.0/24 -j ACCEPT
 
 # Allow to Core Zone Elasticsearch
 iptables -A OUTPUT -p tcp --dport 443 -d 10.0.20.0/24 -j ACCEPT
@@ -1095,9 +1184,9 @@ echo "=== US REGION TESTS ==="
 echo -n "US Outer → Inner DMZ (8082): "
 nc -zv -w 3 10.1.1.10 8082 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
 
-# Test US Inner DMZ → Core Zone MongoDB
-echo -n "US Inner → Core MongoDB (27017): "
-nc -zv -w 3 10.0.10.10 27017 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
+# Test US Inner DMZ → Core Zone MySQL
+echo -n "US Inner → Core MySQL (3306): "
+nc -zv -w 3 10.0.10.10 3306 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
 
 # Test US Inner DMZ → Core Zone ES
 echo -n "US Inner → Core ES (443): "
@@ -1110,16 +1199,16 @@ echo "=== EU REGION TESTS ==="
 echo -n "EU Outer → Inner DMZ (8082): "
 nc -zv -w 3 10.2.1.10 8082 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
 
-echo -n "EU Inner → Core MongoDB (27017): "
-nc -zv -w 3 10.0.10.10 27017 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
+echo -n "EU Inner → Core MySQL (3306): "
+nc -zv -w 3 10.0.10.10 3306 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
 
 # Test JSZ (Uses Core Zone MongoDB/ES, but restricted from other regions)
 echo ""
 echo "=== JSZ CONNECTIVITY TESTS ==="
 
-# JSZ should reach Core Zone MongoDB
-echo -n "JSZ → Core Zone MongoDB (27017): "
-nc -zv -w 3 10.0.10.10 27017 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
+# JSZ should reach Core Zone MySQL
+echo -n "JSZ → Core Zone MySQL (3306): "
+nc -zv -w 3 10.0.10.10 3306 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
 
 # JSZ should reach Core Zone Elasticsearch
 echo -n "JSZ → Core Zone ES (443): "
@@ -1143,9 +1232,9 @@ nc -zv -w 3 10.3.1.10 8082 2>&1 | grep -q "succeeded" && echo "❌ SECURITY ISSU
 echo ""
 echo "=== CORE ZONE TESTS ==="
 
-# Core should reach MongoDB Atlas
-echo -n "Core → MongoDB Atlas: "
-nc -zv -w 3 gravitee.3urvlwj.mongodb.net 27017 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
+# Core should reach MySQL Cluster
+echo -n "Core → MySQL Cluster: "
+nc -zv -w 3 mysql-cluster.internal 3306 2>&1 | grep -q "succeeded" && echo "✅ PASS" || echo "❌ FAIL"
 
 echo ""
 echo "=========================================="
@@ -1162,7 +1251,7 @@ echo "=========================================="
 | WAF rules active | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | TLS 1.3 enforced | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | Default deny policy | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| JSZ uses Core Zone MongoDB/ES | N/A | N/A | N/A | ⬜ | ⬜ |
+| JSZ uses Core Zone MySQL/ES | N/A | N/A | N/A | ⬜ | ⬜ |
 | JSZ isolated from other regions | N/A | N/A | N/A | ⬜ | N/A |
 | JSZ no internet egress | N/A | N/A | N/A | ⬜ | N/A |
 | Audit logging enabled | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |

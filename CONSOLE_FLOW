@@ -1,0 +1,47 @@
+---
+title: Console UI Login Flow (Corporate User)
+---
+
+sequenceDiagram
+    autonumber
+    
+    participant User as 👤 Corporate User<br/>(Corporate Zone)
+    participant Console as 💻 Console UI<br/>(Core Zone)
+    participant OpenAM as 🔐 OpenAM SSO<br/>(Inner DMZ)
+    participant LDAP as 📁 LDAP/AD
+    participant API as 📊 Mgmt API<br/>(Core Zone)
+    
+    Note over User,API: CORPORATE USER → CONSOLE UI LOGIN (OAuth 2.0 / OIDC)
+    
+    User->>Console: 1️⃣ Access console.internal.company.com
+    Console->>Console: Check session
+    Console-->>User: 2️⃣ 302 Redirect to OpenAM
+    
+    Note right of Console: /oauth2/authorize?<br/>client_id=gravitee-console&<br/>redirect_uri=https://console.../callback&<br/>response_type=code&<br/>scope=openid profile
+    
+    User->>OpenAM: 3️⃣ Follow redirect to login page
+    OpenAM-->>User: 4️⃣ Display login form
+    
+    User->>OpenAM: 5️⃣ Submit credentials<br/>(username/password)
+    
+    OpenAM->>LDAP: 6️⃣ Validate credentials
+    LDAP-->>OpenAM: 7️⃣ User authenticated ✅<br/>Groups: [api-admins]
+    
+    OpenAM-->>User: 8️⃣ 302 Redirect with auth code<br/>/callback?code=abc123
+    
+    User->>Console: 9️⃣ GET /callback?code=abc123
+    
+    Console->>OpenAM: 🔟 POST /oauth2/token<br/>{code, client_id, client_secret}
+    
+    OpenAM-->>Console: 1️⃣1️⃣ Token Response<br/>{access_token, id_token, refresh_token}
+    
+    Console->>Console: 1️⃣2️⃣ Create session<br/>Store tokens
+    
+    Console-->>User: 1️⃣3️⃣ Set-Cookie: SESSION<br/>Redirect to dashboard
+    
+    User->>Console: 1️⃣4️⃣ Access dashboard
+    Console->>API: 1️⃣5️⃣ GET /management/apis<br/>Authorization: Bearer token
+    API-->>Console: 1️⃣6️⃣ API list
+    Console-->>User: 1️⃣7️⃣ Render Console Dashboard
+    
+    Note over User,API: ✅ Corporate User logged in to Console UI
